@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { Mail, MapPin, Phone, Save, User } from "lucide-react";
+import {
+    Mail,
+    MapPin,
+    Phone,
+    Save,
+    User,
+} from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
+
 import {
     getCustomersApi,
     updateCustomerApi,
@@ -10,12 +17,17 @@ import {
 
 import type { Customer } from "../../types/customer";
 
-function EditProfile() {
-    const { user } = useAuth();
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phoneRegex = /^0\d{9}$/;
 
-    const [customer, setCustomer] = useState<Customer | null>(null);
+function EditProfile() {
+    const { user, updateUser } = useAuth();
+
+    const [customer, setCustomer] =
+        useState<Customer | null>(null);
 
     const [fullName, setFullName] = useState("");
+    const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
     const [address, setAddress] = useState("");
 
@@ -28,7 +40,9 @@ function EditProfile() {
     useEffect(() => {
         const loadProfile = async () => {
             if (!user) {
-                setError("Không tìm thấy thông tin tài khoản.");
+                setError(
+                    "Không tìm thấy thông tin tài khoản."
+                );
                 setLoading(false);
                 return;
             }
@@ -39,7 +53,8 @@ function EditProfile() {
                 const customers = await getCustomersApi();
 
                 const currentCustomer = customers.find(
-                    (item) => item.user.email === user.email
+                    (item) =>
+                        item.user.email === user.email
                 );
 
                 if (!currentCustomer) {
@@ -50,7 +65,9 @@ function EditProfile() {
                 }
 
                 setCustomer(currentCustomer);
+
                 setFullName(currentCustomer.fullName);
+                setEmail(currentCustomer.user.email);
                 setPhone(currentCustomer.phone);
                 setAddress(currentCustomer.address);
             } catch (error: any) {
@@ -75,6 +92,10 @@ function EditProfile() {
 
         if (name === "fullName") {
             setFullName(value);
+        }
+
+        if (name === "email") {
+            setEmail(value);
         }
 
         if (name === "phone") {
@@ -102,6 +123,7 @@ function EditProfile() {
         setSuccess("");
 
         const fullNameValue = fullName.trim();
+        const emailValue = email.trim();
         const phoneValue = phone.trim();
         const addressValue = address.trim();
 
@@ -110,7 +132,26 @@ function EditProfile() {
             return;
         }
 
-        if (!/^0\d{9}$/.test(phoneValue)) {
+        if (!emailValue) {
+            setError("Vui lòng nhập email.");
+            return;
+        }
+
+        if (!emailRegex.test(emailValue)) {
+            setError(
+                "Email không đúng định dạng."
+            );
+            return;
+        }
+
+        if (!phoneValue) {
+            setError(
+                "Vui lòng nhập số điện thoại."
+            );
+            return;
+        }
+
+        if (!phoneRegex.test(phoneValue)) {
             setError(
                 "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0."
             );
@@ -125,24 +166,49 @@ function EditProfile() {
         setSaving(true);
 
         try {
-            const updatedCustomer = await updateCustomerApi(
-                customer.id,
-                {
-                    customerCode: customer.customerCode,
-                    fullName: fullNameValue,
-                    email: customer.user.email,
-                    phone: phoneValue,
-                    address: addressValue,
-                }
-            );
+            const updatedCustomer =
+                await updateCustomerApi(
+                    customer.id,
+                    {
+                        customerCode:
+                            customer.customerCode,
+                        fullName: fullNameValue,
+                        email: emailValue,
+                        phone: phoneValue,
+                        address: addressValue,
+                    }
+                );
 
             setCustomer(updatedCustomer);
 
-            setFullName(updatedCustomer.fullName);
-            setPhone(updatedCustomer.phone);
-            setAddress(updatedCustomer.address);
+            setFullName(
+                updatedCustomer.fullName
+            );
 
-            setSuccess("Cập nhật thông tin thành công.");
+            setEmail(
+                updatedCustomer.user.email
+            );
+
+            setPhone(
+                updatedCustomer.phone
+            );
+
+            setAddress(
+                updatedCustomer.address
+            );
+
+            /*
+             * Cập nhật email trong AuthContext
+             * và localStorage để hệ thống sử dụng
+             * email mới sau khi người dùng chỉnh sửa.
+             */
+            updateUser({
+                email: updatedCustomer.user.email,
+            });
+
+            setSuccess(
+                "Cập nhật thông tin thành công."
+            );
         } catch (error: any) {
             console.error(error);
 
@@ -160,7 +226,9 @@ function EditProfile() {
             <div className="profile-page">
                 <div className="page-header">
                     <h1>Thông tin cá nhân</h1>
-                    <p>Đang tải thông tin...</p>
+                    <p>
+                        Đang tải thông tin...
+                    </p>
                 </div>
             </div>
         );
@@ -170,8 +238,10 @@ function EditProfile() {
         <div className="profile-page">
             <div className="page-header">
                 <h1>Thông tin cá nhân</h1>
+
                 <p>
-                    Xem và cập nhật thông tin tài khoản của bạn.
+                    Xem và cập nhật thông tin tài khoản
+                    của bạn.
                 </p>
             </div>
 
@@ -180,16 +250,22 @@ function EditProfile() {
                     <>
                         <div className="profile-card-header">
                             <div>
-                                <h2>Thông tin khách hàng</h2>
+                                <h2>
+                                    Thông tin khách hàng
+                                </h2>
+
                                 <p>
-                                    Cập nhật thông tin liên hệ của bạn.
+                                    Bạn có thể chỉnh sửa
+                                    thông tin cá nhân.
                                 </p>
                             </div>
 
                             <div className="profile-code">
                                 Mã khách hàng:{" "}
                                 <strong>
-                                    {customer.customerCode}
+                                    {
+                                        customer.customerCode
+                                    }
                                 </strong>
                             </div>
                         </div>
@@ -211,62 +287,91 @@ function EditProfile() {
                             onSubmit={handleSubmit}
                         >
                             <div className="profile-form-grid">
+                                {/* HỌ VÀ TÊN */}
                                 <div className="form-group">
-                                    <label>Email</label>
-
-                                    <div className="profile-input-wrapper">
-                                        <Mail size={18} />
-
-                                        <input
-                                            type="email"
-                                            value={customer.user.email}
-                                            disabled
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Họ và tên</label>
+                                    <label htmlFor="fullName">
+                                        Họ và tên
+                                    </label>
 
                                     <div className="profile-input-wrapper">
                                         <User size={18} />
 
                                         <input
+                                            id="fullName"
                                             type="text"
                                             name="fullName"
                                             value={fullName}
-                                            onChange={handleChange}
+                                            onChange={
+                                                handleChange
+                                            }
+                                            placeholder="Nhập họ và tên"
                                         />
                                     </div>
                                 </div>
 
+                                {/* EMAIL */}
                                 <div className="form-group">
-                                    <label>Số điện thoại</label>
+                                    <label htmlFor="email">
+                                        Email
+                                    </label>
+
+                                    <div className="profile-input-wrapper">
+                                        <Mail size={18} />
+
+                                        <input
+                                            id="email"
+                                            type="email"
+                                            name="email"
+                                            value={email}
+                                            onChange={
+                                                handleChange
+                                            }
+                                            placeholder="Nhập email"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* SỐ ĐIỆN THOẠI */}
+                                <div className="form-group">
+                                    <label htmlFor="phone">
+                                        Số điện thoại
+                                    </label>
 
                                     <div className="profile-input-wrapper">
                                         <Phone size={18} />
 
                                         <input
+                                            id="phone"
                                             type="tel"
                                             name="phone"
                                             value={phone}
-                                            onChange={handleChange}
+                                            onChange={
+                                                handleChange
+                                            }
                                             maxLength={10}
+                                            placeholder="0912345678"
                                         />
                                     </div>
                                 </div>
 
+                                {/* ĐỊA CHỈ */}
                                 <div className="form-group">
-                                    <label>Địa chỉ</label>
+                                    <label htmlFor="address">
+                                        Địa chỉ
+                                    </label>
 
                                     <div className="profile-input-wrapper">
                                         <MapPin size={18} />
 
                                         <input
+                                            id="address"
                                             type="text"
                                             name="address"
                                             value={address}
-                                            onChange={handleChange}
+                                            onChange={
+                                                handleChange
+                                            }
+                                            placeholder="Nhập địa chỉ"
                                         />
                                     </div>
                                 </div>

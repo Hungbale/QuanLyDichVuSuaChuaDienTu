@@ -14,6 +14,7 @@ interface AuthContextType {
     isAuthenticated: boolean;
     login: (data: LoginRequest) => Promise<UserInfo>;
     logout: () => Promise<void>;
+    updateUser: (data: Partial<UserInfo>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(
@@ -41,6 +42,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
         }
     }, []);
+
+    const updateUser = (data: Partial<UserInfo>) => {
+        setUser((previous) => {
+            if (!previous) {
+                return previous;
+            }
+
+            const updatedUser = {
+                ...previous,
+                ...data,
+            };
+
+            localStorage.setItem(
+                "user",
+                JSON.stringify(updatedUser)
+            );
+
+            return updatedUser;
+        });
+    };
 
     const login = async (
         data: LoginRequest
@@ -82,6 +103,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 isAuthenticated: user !== null,
                 login,
                 logout,
+                updateUser,
             }}
         >
             {children}
