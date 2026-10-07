@@ -6,8 +6,8 @@ import {
     EyeOff,
     Lock,
     Mail,
+    ArrowRight,
 } from "lucide-react";
-
 import { useAuth } from "../../context/AuthContext";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -18,9 +18,7 @@ function Login() {
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-
     const [showPassword, setShowPassword] = useState(false);
-
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -28,7 +26,6 @@ function Login() {
         event: FormEvent<HTMLFormElement>
     ) => {
         event.preventDefault();
-
         setError("");
 
         const emailValue = email.trim();
@@ -36,7 +33,6 @@ function Login() {
         // =========================
         // VALIDATE EMAIL
         // =========================
-
         if (!emailValue) {
             setError("Vui lòng nhập email.");
             return;
@@ -50,7 +46,6 @@ function Login() {
         // =========================
         // VALIDATE PASSWORD
         // =========================
-
         if (!password) {
             setError("Vui lòng nhập mật khẩu.");
             return;
@@ -72,7 +67,6 @@ function Login() {
             // =========================
             // ĐIỀU HƯỚNG THEO ROLE
             // =========================
-
             if (user.role === "CUSTOMER") {
                 navigate("/customer");
             } else if (user.role === "EMPLOYEE") {
@@ -85,15 +79,12 @@ function Login() {
         } catch (error: any) {
             console.error(error);
 
-            const message =
-                error.response?.data?.message;
+            const message = error.response?.data?.message;
 
             if (message) {
                 setError(message);
             } else {
-                setError(
-                    "Email hoặc mật khẩu không chính xác."
-                );
+                setError("Email hoặc mật khẩu không chính xác.");
             }
         } finally {
             setLoading(false);
@@ -101,168 +92,173 @@ function Login() {
     };
 
     return (
-        <div className="auth-page">
-            <div className="auth-container">
+        <div className="liquid-login-page">
+            {/* BACKGROUND LIGHTS */}
+            <div className="liquid-orb liquid-orb-one" />
+            <div className="liquid-orb liquid-orb-two" />
+            <div className="liquid-orb liquid-orb-three" />
 
-                {/* LOGO / BRAND */}
-                <div className="auth-brand">
-                    <div className="auth-logo">
+            {/* BACKGROUND GRID */}
+            <div className="liquid-grid" />
+
+            <div className="liquid-login-container">
+                {/* BRAND */}
+                <div className="liquid-brand">
+                    <div className="liquid-logo">
                         FIXHUB
                     </div>
 
                     <h1>
-                        Quản lý dịch vụ sửa chữa máy tính
+                        Quản lý dịch vụ
+                        <br />
+                        sửa chữa máy tính
                     </h1>
 
                     <p>
                         Đăng nhập để sử dụng hệ thống
+                        <br />
                         quản lý dịch vụ sửa chữa.
                     </p>
                 </div>
 
-                {/* LOGIN CARD */}
-                <div className="auth-card">
+                {/* GLASS CARD */}
+                <div className="liquid-login-card">
+                    {/* CARD SHINE */}
+                    <div className="liquid-card-shine" />
 
-                    <div className="auth-card-header">
-                        <h2>
-                            Đăng nhập
-                        </h2>
+                    <div className="liquid-card-content">
+                        <div className="liquid-card-header">
+                            <span className="liquid-card-label">
+                                WELCOME BACK
+                            </span>
 
-                        <p>
-                            Nhập thông tin tài khoản của bạn
-                        </p>
-                    </div>
+                            <h2>
+                                Đăng nhập
+                            </h2>
 
-                    <form
-                        className="auth-form"
-                        onSubmit={handleSubmit}
-                    >
-
-                        {/* EMAIL */}
-                        <div className="auth-form-group">
-
-                            <label htmlFor="email">
-                                Email
-                            </label>
-
-                            <div className="auth-input-wrapper">
-
-                                <Mail
-                                    size={18}
-                                />
-
-                                <input
-                                    id="email"
-                                    type="email"
-                                    name="email"
-                                    value={email}
-                                    onChange={(event) =>
-                                        setEmail(event.target.value)
-                                    }
-                                    placeholder="Nhập email"
-                                    autoComplete="email"
-                                    required
-                                />
-
-                            </div>
-
+                            <p>
+                                Nhập thông tin tài khoản của bạn
+                            </p>
                         </div>
 
-                        {/* PASSWORD */}
-                        <div className="auth-form-group">
-
-                            <label htmlFor="password">
-                                Mật khẩu
-                            </label>
-
-                            <div className="auth-input-wrapper">
-
-                                <Lock
-                                    size={18}
-                                />
-
-                                <input
-                                    id="password"
-                                    type={
-                                        showPassword
-                                            ? "text"
-                                            : "password"
-                                    }
-                                    name="password"
-                                    value={password}
-                                    onChange={(event) =>
-                                        setPassword(event.target.value)
-                                    }
-                                    placeholder="Nhập mật khẩu"
-                                    autoComplete="current-password"
-                                    required
-                                />
-
-                                <button
-                                    type="button"
-                                    className="password-toggle"
-                                    onClick={() =>
-                                        setShowPassword(
-                                            (previous) =>
-                                                !previous
-                                        )
-                                    }
-                                    aria-label={
-                                        showPassword
-                                            ? "Ẩn mật khẩu"
-                                            : "Hiện mật khẩu"
-                                    }
-                                >
-                                    {showPassword ? (
-                                        <EyeOff size={18} />
-                                    ) : (
-                                        <Eye size={18} />
-                                    )}
-                                </button>
-
-                            </div>
-
-                        </div>
-
-                        {/* ERROR */}
-                        {error && (
-                            <div className="auth-error">
-                                {error}
-                            </div>
-                        )}
-
-                        {/* SUBMIT */}
-                        <button
-                            type="submit"
-                            className="auth-submit-button"
-                            disabled={loading}
+                        <form
+                            className="liquid-login-form"
+                            onSubmit={handleSubmit}
                         >
-                            {loading
-                                ? "Đang đăng nhập..."
-                                : "Đăng nhập"}
-                        </button>
+                            {/* EMAIL */}
+                            <div className="liquid-form-group">
+                                <label htmlFor="email">
+                                    Email
+                                </label>
 
-                    </form>
+                                <div className="liquid-input-wrapper">
+                                    <Mail size={18} />
 
-                    {/* REGISTER LINK */}
-                    <div className="auth-footer">
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        name="email"
+                                        value={email}
+                                        onChange={(event) =>
+                                            setEmail(event.target.value)
+                                        }
+                                        placeholder="Nhập email"
+                                        autoComplete="email"
+                                        required
+                                    />
+                                </div>
+                            </div>
 
-                        <span>
-                            Chưa có tài khoản?
-                        </span>
+                            {/* PASSWORD */}
+                            <div className="liquid-form-group">
+                                <label htmlFor="password">
+                                    Mật khẩu
+                                </label>
 
-                        <Link to="/register">
-                            Đăng ký ngay
-                        </Link>
+                                <div className="liquid-input-wrapper">
+                                    <Lock size={18} />
 
+                                    <input
+                                        id="password"
+                                        type={
+                                            showPassword
+                                                ? "text"
+                                                : "password"
+                                        }
+                                        name="password"
+                                        value={password}
+                                        onChange={(event) =>
+                                            setPassword(event.target.value)
+                                        }
+                                        placeholder="Nhập mật khẩu"
+                                        autoComplete="current-password"
+                                        required
+                                    />
+
+                                    <button
+                                        type="button"
+                                        className="liquid-password-toggle"
+                                        onClick={() =>
+                                            setShowPassword(
+                                                (previous) => !previous
+                                            )
+                                        }
+                                        aria-label={
+                                            showPassword
+                                                ? "Ẩn mật khẩu"
+                                                : "Hiện mật khẩu"
+                                        }
+                                    >
+                                        {showPassword ? (
+                                            <EyeOff size={18} />
+                                        ) : (
+                                            <Eye size={18} />
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* ERROR */}
+                            {error && (
+                                <div className="liquid-error">
+                                    {error}
+                                </div>
+                            )}
+
+                            {/* LOGIN BUTTON */}
+                            <button
+                                type="submit"
+                                className="liquid-submit"
+                                disabled={loading}
+                            >
+                                <span>
+                                    {loading
+                                        ? "Đang đăng nhập..."
+                                        : "Đăng nhập"}
+                                </span>
+
+                                {!loading && (
+                                    <ArrowRight size={18} />
+                                )}
+                            </button>
+                        </form>
+
+                        {/* REGISTER */}
+                        <div className="liquid-register">
+                            <span>
+                                Chưa có tài khoản?
+                            </span>
+
+                            <Link to="/register">
+                                Đăng ký ngay
+                            </Link>
+                        </div>
                     </div>
-
                 </div>
 
-                <div className="auth-copyright">
-                    © 2026 FIXHUB. All rights reserved.
+                <div className="liquid-copyright">
+                    © 2026 FIXHUB
                 </div>
-
             </div>
         </div>
     );
