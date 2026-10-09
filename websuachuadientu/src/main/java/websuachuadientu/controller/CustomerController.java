@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import websuachuadientu.dto.CustomerRequest;
 import websuachuadientu.entity.Customer;
@@ -19,6 +20,18 @@ import java.util.List;
 public class CustomerController {
 
     private final CustomerService customerService;
+
+    @GetMapping("/me")
+    public ResponseEntity<Customer> getMyProfile(Authentication authentication) {
+        return ResponseEntity.ok(customerService.getByEmail(authentication.getName()));
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<Customer> updateMyProfile(
+            Authentication authentication,
+            @Valid @RequestBody CustomerRequest request) {
+        return ResponseEntity.ok(customerService.updateByEmail(authentication.getName(), request));
+    }
 
     @GetMapping
     public ResponseEntity<List<Customer>> search(
