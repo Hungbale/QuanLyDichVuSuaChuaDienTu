@@ -32,6 +32,11 @@ public class CustomerService {
                         new RuntimeException("Không tìm thấy khách hàng"));
     }
 
+    public Customer getByEmail(String email) {
+        return customerRepository.findByUser_Email(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy hồ sơ khách hàng"));
+    }
+
     @Transactional
     public Customer create(CustomerRequest request) {
 
@@ -97,6 +102,11 @@ public class CustomerService {
         customer.setAddress(request.getAddress());
 
         return customerRepository.save(customer);
+    }
+
+    @Transactional
+    public Customer updateByEmail(String email, CustomerRequest request) {
+        return update(getByEmail(email).getId(), request);
     }
 
     public Customer changeStatus(Long id) {
