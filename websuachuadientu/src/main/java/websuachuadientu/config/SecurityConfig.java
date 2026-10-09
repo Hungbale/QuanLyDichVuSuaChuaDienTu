@@ -60,8 +60,44 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        .anyRequest().authenticated()
-//                        .anyRequest().permitAll()
+                        // Admin có toàn quyền trên các API.
+                        .requestMatchers(HttpMethod.POST, "/api/auth/logout")
+                        .hasAnyRole("CUSTOMER", "EMPLOYEE", "ADMIN")
+
+                        // Customer: xem catalog, đặt lịch, hồ sơ và nghiệp vụ của chính mình.
+                        .requestMatchers(HttpMethod.GET, "/api/categories/**", "/api/services/**")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.POST, "/api/appointments")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/repair-tickets/history/me")
+                        .hasAnyRole("ADMIN", "CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/customers/me")
+                        .hasAnyRole("ADMIN", "CUSTOMER")
+                        .requestMatchers(HttpMethod.PUT, "/api/customers/me")
+                        .hasAnyRole("ADMIN", "CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/repair-tickets/*/quote")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.PATCH, "/api/quotes/*/decision")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.POST, "/api/repair-tickets/*/payments")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/repair-tickets/*/payments")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+
+                        // Employee: xử lý nghiệp vụ nội bộ và tra cứu khách hàng.
+                        .requestMatchers("/api/repair-tickets/**", "/api/quotes/**", "/api/payments/**")
+                        .hasAnyRole("ADMIN", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/appointments")
+                        .hasAnyRole("ADMIN", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/customers", "/api/customers/*")
+                        .hasAnyRole("ADMIN", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.POST, "/api/customers")
+                        .hasAnyRole("ADMIN", "EMPLOYEE")
+
+                        .requestMatchers("/api/**").hasRole("ADMIN")
+
+                        // Mặc định từ chối endpoint chưa được gán quyền.
+                        .anyRequest().denyAll()
                 )
 
                 .addFilterBefore(
@@ -79,7 +115,10 @@ public class SecurityConfig {
 
         // FE React
         configuration.setAllowedOrigins(
-                List.of("http://localhost:5173")
+                List.of(
+                        "http://localhost:5173",
+                        "http://localhost:8080"
+                )
         );
 
         // Các method FE được phép gọi
