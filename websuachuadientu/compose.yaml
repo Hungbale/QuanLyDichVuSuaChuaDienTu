@@ -28,6 +28,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/repair_service?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: repair_user
       SPRING_DATASOURCE_PASSWORD: repair123
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@repair.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
 
     depends_on:
       - mysql
