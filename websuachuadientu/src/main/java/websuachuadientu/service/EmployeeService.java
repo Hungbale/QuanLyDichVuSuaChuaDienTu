@@ -78,11 +78,11 @@ public class EmployeeService {
     public Employee create(EmployeeRequest request) {
 
         if (employeeRepository.existsByEmployeeCode(request.getEmployeeCode())) {
-            throw new RuntimeException("Mã nhân viên đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Mã nhân viên đã tồn tại");
         }
 
         if (employeeRepository.existsByPhone(request.getPhone())) {
-            throw new RuntimeException("Số điện thoại đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Số điện thoại đã tồn tại");
         }
 
         if (request.getPassword() == null || request.getPassword().isBlank()) {
@@ -90,7 +90,7 @@ public class EmployeeService {
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã tồn tại");
         }
 
         User user = new User();
@@ -117,12 +117,12 @@ public class EmployeeService {
 
         if (!user.getEmail().equalsIgnoreCase(request.getEmail())
                 && userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã tồn tại");
         }
 
         if (!employee.getPhone().equals(request.getPhone())
                 && employeeRepository.existsByPhone(request.getPhone())) {
-            throw new RuntimeException("Số điện thoại đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Số điện thoại đã tồn tại");
         }
 
         user.setEmail(request.getEmail());
