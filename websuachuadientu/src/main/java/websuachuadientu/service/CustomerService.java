@@ -1,9 +1,11 @@
 package websuachuadientu.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import websuachuadientu.dto.CustomerRequest;
 import websuachuadientu.entity.Customer;
 import websuachuadientu.entity.User;
@@ -42,16 +44,16 @@ public class CustomerService {
 
         if (customerRepository.existsByCustomerCode(
                 request.getCustomerCode())) {
-            throw new RuntimeException("Mã khách hàng đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Mã khách hàng đã tồn tại");
         }
 
         if (userRepository.existsByEmail(request.getEmail())
                 || customerRepository.existsByUser_Email(request.getEmail())) {
-            throw new RuntimeException("Email đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã tồn tại");
         }
 
         if (customerRepository.existsByPhone(request.getPhone())) {
-            throw new RuntimeException("Số điện thoại đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Số điện thoại đã tồn tại");
         }
 
         if (request.getPassword() == null || request.getPassword().isBlank()) {
@@ -84,12 +86,12 @@ public class CustomerService {
 
         if (!user.getEmail().equalsIgnoreCase(request.getEmail())
                 && userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã tồn tại");
         }
 
         if (!customer.getPhone().equals(request.getPhone())
                 && customerRepository.existsByPhone(request.getPhone())) {
-            throw new RuntimeException("Số điện thoại đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Số điện thoại đã tồn tại");
         }
 
         user.setEmail(request.getEmail());
