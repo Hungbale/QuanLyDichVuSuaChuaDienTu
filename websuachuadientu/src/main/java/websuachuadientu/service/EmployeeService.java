@@ -11,6 +11,8 @@ import websuachuadientu.repository.EmployeeRepository;
 import websuachuadientu.repository.UserRepository;
 
 import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +40,12 @@ public class EmployeeService {
         return employeeRepository.findById(id)
                 .orElseThrow(() ->
                         new RuntimeException("Không tìm thấy nhân viên"));
+    }
+
+    public Employee getByEmail(String email) {
+        return employeeRepository.findByUser_Email(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Không tìm thấy hồ sơ nhân viên"));
     }
 
     @Transactional
