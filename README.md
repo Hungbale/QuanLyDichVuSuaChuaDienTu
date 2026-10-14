@@ -50,37 +50,6 @@ docker compose logs -f backend
 
 Nhấn `Ctrl + C` để thoát màn hình xem log. Các container chạy nền vẫn tiếp tục hoạt động.
 
-### 5. Kết nối Frontend với Backend
-
-Backend mặc định sử dụng cổng `8080`. Khi Frontend chạy trên máy tính bằng React/Vite, có thể tạo file `.env` riêng trong thư mục Frontend:
-
-```env
-VITE_API_URL=http://localhost:8080
-```
-
-Trong code Frontend, sử dụng biến môi trường:
-
-```javascript
-const API_URL = import.meta.env.VITE_API_URL;
-```
-
-Sử dụng `API_URL` làm địa chỉ gốc khi gọi các API của Backend. Nếu Backend chạy ở địa chỉ hoặc cổng khác, hãy cập nhật URL tương ứng và khởi động lại Vite.
-
-**Lưu ý:** Không đưa mật khẩu MySQL, mật khẩu admin hoặc JWT secret vào file `.env` của Frontend.
-
-### 6. Dừng hệ thống
-
-Để dừng các service:
-
-```bash
-docker compose stop
-```
-
-Để dừng và xóa các container thuộc dự án:
-
-```bash
-docker compose down
-```
 
 Lệnh `docker compose down` thông thường không xóa dữ liệu trong named volume của MySQL. Không sử dụng `docker compose down -v` nếu muốn giữ dữ liệu database.
 
