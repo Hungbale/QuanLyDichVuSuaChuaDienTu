@@ -1,6 +1,88 @@
 # Web sửa chữa điện tử – Hướng dẫn API tài khoản
 
-Tài liệu này hướng dẫn gọi API bằng Postman hoặc Swagger UI cho đăng ký, đăng nhập, đăng xuất, tài khoản admin/nhân viên và hồ sơ khách hàng.
+
+## Hướng dẫn cấu hình môi trường và chạy Backend
+
+### 1. Chuẩn bị môi trường
+
+Cài đặt và khởi động Docker Desktop trước khi thực hiện các bước tiếp theo.
+
+### 2. Tạo file `.env`
+
+Tại thư mục ngang hàng với file `docker-compose.yml`, tạo file có tên `.env` (nếu chưa có). Điền nội dung sau:
+
+```env
+MYSQL_ROOT_PASSWORD=change-this-root-password
+MYSQL_DATABASE=repair_service
+MYSQL_USER=repair_user
+MYSQL_PASSWORD=change-this-database-password
+ADMIN_EMAIL=admin@repair.local
+ADMIN_PASSWORD=change-this-admin-password
+```
+
+Thay các giá trị mật khẩu mẫu bằng giá trị phù hợp cho môi trường chạy của bạn. Các biến phải được giữ đúng tên để khớp với cấu hình Docker Compose.
+
+**Lưu ý:** Không đưa file `.env` thật lên GitHub vì file này chứa thông tin cấu hình nhạy cảm. Nếu dự án có file `.env.example`, hãy sao chép file đó thành `.env` rồi điền các giá trị tương ứng.
+
+### 3. Khởi chạy Backend và Database
+
+Mở Terminal tại thư mục chứa `docker-compose.yml`, chạy lệnh:
+
+```bash
+docker compose up -d --build
+```
+
+Docker sẽ build image cần thiết và khởi chạy các service được khai báo trong file Docker Compose.
+
+### 4. Kiểm tra trạng thái
+
+Kiểm tra các container:
+
+```bash
+docker compose ps
+```
+
+Xem log Backend:
+
+```bash
+docker compose logs -f backend
+```
+
+Nhấn `Ctrl + C` để thoát màn hình xem log. Các container chạy nền vẫn tiếp tục hoạt động.
+
+### 5. Kết nối Frontend với Backend
+
+Backend mặc định sử dụng cổng `8080`. Khi Frontend chạy trên máy tính bằng React/Vite, có thể tạo file `.env` riêng trong thư mục Frontend:
+
+```env
+VITE_API_URL=http://localhost:8080
+```
+
+Trong code Frontend, sử dụng biến môi trường:
+
+```javascript
+const API_URL = import.meta.env.VITE_API_URL;
+```
+
+Sử dụng `API_URL` làm địa chỉ gốc khi gọi các API của Backend. Nếu Backend chạy ở địa chỉ hoặc cổng khác, hãy cập nhật URL tương ứng và khởi động lại Vite.
+
+**Lưu ý:** Không đưa mật khẩu MySQL, mật khẩu admin hoặc JWT secret vào file `.env` của Frontend.
+
+### 6. Dừng hệ thống
+
+Để dừng các service:
+
+```bash
+docker compose stop
+```
+
+Để dừng và xóa các container thuộc dự án:
+
+```bash
+docker compose down
+```
+
+Lệnh `docker compose down` thông thường không xóa dữ liệu trong named volume của MySQL. Không sử dụng `docker compose down -v` nếu muốn giữ dữ liệu database.
 
 ## 1. Khởi động backend
 
