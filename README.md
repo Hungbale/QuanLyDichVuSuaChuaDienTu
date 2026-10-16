@@ -217,3 +217,28 @@ Gửi token Bearer hiện tại. Thành công trả `200 OK`; token được đ�
 - `409 Conflict`: email hoặc số điện thoại đã được sử dụng.
 
 Mật khẩu không được API trả về; backend lưu mật khẩu bằng BCrypt.
+
+## 10. Quản lý dịch vụ
+
+Các API dưới đây dùng base URL `http://localhost:8080`. Cần đăng nhập để lấy JWT rồi gửi header `Authorization: Bearer <token>`. `ADMIN`, `EMPLOYEE` và `CUSTOMER` được xem danh sách/chi tiết; chỉ `ADMIN` được thêm, sửa và xóa dịch vụ.
+
+| Method | Endpoint | Chức năng |
+|---|---|---|
+| `GET` | `/api/services` | Xem danh sách; lọc tùy chọn bằng `?keyword=...`, `?status=ACTIVE` hoặc `?categoryId=1` |
+| `GET` | `/api/services/{id}` | Xem chi tiết dịch vụ |
+| `POST` | `/api/services` | Thêm dịch vụ (admin) |
+| `PUT` | `/api/services/{id}` | Sửa dịch vụ (admin) |
+| `DELETE` | `/api/services/{id}` | Xóa dịch vụ (admin), thành công trả `204 No Content` |
+
+Body dùng cho `POST` và `PUT` (cần `categoryId` của danh mục đang hoạt động):
+
+```json
+{
+  "name": "Thay quạt laptop",
+  "categoryId": 1,
+  "price": 150000,
+  "description": "Thay quạt tản nhiệt laptop"
+}
+```
+
+`name` không được để trống; `categoryId` và `price` là bắt buộc; `price` phải lớn hơn hoặc bằng 0. Khi thêm thành công, backend tự tạo `serviceCode` và đặt trạng thái ban đầu là `ACTIVE`.
