@@ -10,8 +10,8 @@ import {
 import { useAuth } from "../../context/AuthContext";
 
 import {
-    getEmployeesApi,
-    updateEmployeeApi,
+    getMyEmployeeProfileApi,
+    updateMyEmployeeProfileApi,
 } from "../../api/employeeApi";
 
 import type { Employee } from "../../types/employee";
@@ -48,29 +48,7 @@ function EmployeeProfile() {
             try {
                 setError("");
 
-                /*
-                 * Không dùng GET /api/employees/{user.id}
-                 * vì user.id là ID của bảng users.
-                 *
-                 * Lấy danh sách nhân viên rồi tìm
-                 * nhân viên theo email tài khoản đăng nhập.
-                 */
-                const employees =
-                    await getEmployeesApi();
-
-                const currentEmployee =
-                    employees.find(
-                        (item) =>
-                            item.user.email ===
-                            user.email
-                    );
-
-                if (!currentEmployee) {
-                    setError(
-                        "Không tìm thấy thông tin nhân viên tương ứng với tài khoản."
-                    );
-                    return;
-                }
+                const currentEmployee = await getMyEmployeeProfileApi();
 
                 setEmployee(currentEmployee);
 
@@ -79,7 +57,7 @@ function EmployeeProfile() {
                 );
 
                 setEmail(
-                    currentEmployee.user.email
+                    currentEmployee.email ?? currentEmployee.user?.email ?? ""
                 );
 
                 setPhone(
@@ -87,6 +65,7 @@ function EmployeeProfile() {
                 );
             } catch (error: any) {
                 console.error(error);
+                setEmployee(null);
 
                 setError(
                     error.response?.data?.message ||
@@ -178,25 +157,15 @@ function EmployeeProfile() {
         }
 
         setSaving(true);
+        setError("");
+        setSuccess("");
 
         try {
-            const updatedEmployee =
-                await updateEmployeeApi(
-                    employee.id,
-                    {
-                        employeeCode:
-                            employee.employeeCode,
-
-                        fullName:
-                            fullNameValue,
-
-                        email:
-                            emailValue,
-
-                        phone:
-                            phoneValue,
-                    }
-                );
+            const updatedEmployee = await updateMyEmployeeProfileApi({
+                fullName: fullNameValue,
+                email: emailValue,
+                phone: phoneValue,
+            });
 
             setEmployee(
                 updatedEmployee
@@ -207,7 +176,7 @@ function EmployeeProfile() {
             );
 
             setEmail(
-                updatedEmployee.user.email
+                updatedEmployee.email ?? updatedEmployee.user?.email ?? ""
             );
 
             setPhone(
@@ -220,9 +189,10 @@ function EmployeeProfile() {
              */
             updateUser({
                 email:
-                    updatedEmployee.user.email,
+                    updatedEmployee.email ?? updatedEmployee.user?.email ?? "",
             });
 
+            setError("");
             setSuccess(
                 "Cập nhật thông tin thành công."
             );
@@ -292,15 +262,15 @@ function EmployeeProfile() {
                             </div>
                         </div>
 
-                        {error && (
-                            <div className="error-message">
-                                {error}
-                            </div>
-                        )}
-
                         {success && (
                             <div className="success-message">
                                 {success}
+                            </div>
+                        )}
+
+                        {!success && error && (
+                            <div className="error-message">
+                                {error}
                             </div>
                         )}
 

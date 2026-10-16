@@ -8,7 +8,11 @@ interface ProtectedRouteProps {
 function ProtectedRoute({
     allowedRoles,
 }: ProtectedRouteProps) {
-    const { user, isAuthenticated } = useAuth();
+    const { user, isAuthenticated, isInitializing } = useAuth();
+
+    if (isInitializing) {
+        return null;
+    }
 
     if (!isAuthenticated || !user) {
         return <Navigate to="/login" replace />;

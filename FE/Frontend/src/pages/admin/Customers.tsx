@@ -101,7 +101,7 @@ function AdminCustomers() {
         setForm({
             customerCode: customer.customerCode,
             fullName: customer.fullName,
-            email: customer.email,
+            email: customer.email ?? customer.user?.email ?? "",
             password: "",
             phone: customer.phone,
             address: customer.address,
@@ -430,9 +430,7 @@ function AdminCustomers() {
                                         </td>
 
                                         <td>
-                                            {
-                                                customer.email
-                                            }
+                                            {customer.email ?? customer.user?.email ?? "—"}
                                         </td>
 
                                         <td>
