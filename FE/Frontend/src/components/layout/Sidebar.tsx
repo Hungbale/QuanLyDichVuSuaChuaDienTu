@@ -1,156 +1,121 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
+    CalendarDays,
+    CalendarPlus,
+    ChartColumn,
+    CheckCheck,
+    ClipboardCheck,
+    ClipboardList,
+    CreditCard,
+    FileText,
+    History,
     LayoutDashboard,
-    Wrench,
-    Users,
-    UserCog,
-    Tags,
     LogOut,
+    PanelLeftClose,
+    PanelLeftOpen,
+    ShieldCheck,
+    Star,
+    Stethoscope,
+    UserRound,
+    Users,
+    Wrench,
 } from "lucide-react";
 
+type UserRole = "CUSTOMER" | "EMPLOYEE" | "ADMIN";
+
 interface SidebarProps {
-    role: "CUSTOMER" | "EMPLOYEE";
+    role: UserRole;
+    email?: string;
     onLogout: () => void;
 }
 
-function Sidebar({ role, onLogout }: SidebarProps) {
-    const customerMenu = [
-        {
-            to: "/customer",
-            label: "Tổng quan",
-            icon: LayoutDashboard,
-        },
-        {
-            to: "/customer/services",
-            label: "Dịch vụ sửa chữa",
-            icon: Wrench,
-        },
-    ];
+const roleLabels: Record<UserRole, string> = {
+    CUSTOMER: "Khách hàng",
+    EMPLOYEE: "Nhân viên",
+    ADMIN: "Quản trị viên",
+};
 
-    const employeeMenu = [
-        {
-            to: "/employee",
-            label: "Tổng quan",
-            icon: LayoutDashboard,
-        },
-        {
-            to: "/employee/customers",
-            label: "Khách hàng",
-            icon: Users,
-        },
-        {
-            to: "/employee/employees",
-            label: "Nhân viên",
-            icon: UserCog,
-        },
-        {
-            to: "/employee/categories",
-            label: "Danh mục",
-            icon: Tags,
-        },
-        {
-            to: "/employee/services",
-            label: "Dịch vụ",
-            icon: Wrench,
-        },
-    ];
+const roleMenus = {
+    CUSTOMER: [
+        { to: "/customer", label: "Bảng điều khiển", icon: LayoutDashboard, end: true },
+        { to: "/customer/profile", label: "Thông tin cá nhân", icon: UserRound },
+        { to: "/customer/services", label: "Dịch vụ sửa chữa", icon: Wrench },
+        { to: "/customer/book-appointment", label: "Đặt lịch", icon: CalendarPlus },
+        { to: "/customer/appointments", label: "Lịch hẹn", icon: CalendarDays },
+        { to: "/customer/repair-tracking", label: "Theo dõi sửa chữa", icon: ClipboardCheck },
+        { to: "/customer/quotes", label: "Duyệt báo giá", icon: FileText },
+        { to: "/customer/payment", label: "Thanh toán", icon: CreditCard },
+        { to: "/customer/repair-history", label: "Lịch sử sửa chữa", icon: History },
+        { to: "/customer/reviews", label: "Đánh giá dịch vụ", icon: Star },
+        { to: "/customer/warranty", label: "Yêu cầu bảo hành", icon: ShieldCheck },
+    ],
+    EMPLOYEE: [
+        { to: "/employee", label: "Bảng điều khiển", icon: LayoutDashboard, end: true },
+        { to: "/employee/receive-device", label: "Tiếp nhận thiết bị", icon: CalendarPlus },
+        { to: "/employee/repairs", label: "Phiếu sửa chữa", icon: ClipboardList },
+        { to: "/employee/diagnosis", label: "Chẩn đoán thiết bị", icon: Stethoscope },
+        { to: "/employee/quotes", label: "Báo giá", icon: FileText },
+        { to: "/employee/appointments", label: "Lịch hẹn", icon: CalendarDays },
+        { to: "/employee/repair-process", label: "Thực hiện sửa chữa", icon: Wrench },
+        { to: "/employee/complete-repair", label: "Hoàn tất sửa chữa", icon: CheckCheck },
+        { to: "/employee/profile", label: "Thông tin cá nhân", icon: UserRound },
+    ],
+    ADMIN: [
+        { to: "/admin", label: "Bảng điều khiển", icon: LayoutDashboard, end: true },
+        { to: "/admin/employees", label: "Quản lý nhân viên", icon: Users },
+        { to: "/admin/services", label: "Quản lý dịch vụ", icon: Wrench },
+        { to: "/admin/customers", label: "Quản lý khách hàng", icon: UserRound },
+        { to: "/admin/repairs", label: "Quản lý sửa chữa", icon: ClipboardList },
+        { to: "/admin/reports", label: "Báo cáo thống kê", icon: ChartColumn },
+        { to: "/admin/profile", label: "Thông tin cá nhân", icon: UserRound },
+    ],
+};
 
-    const menu = role === "CUSTOMER"
-        ? customerMenu
-        : employeeMenu;
+function Sidebar({ role, email, onLogout }: SidebarProps) {
+    const [collapsed, setCollapsed] = useState(false);
 
     return (
-        <aside
-            style={{
-                width: "240px",
-                minHeight: "100vh",
-                background: "#111",
-                color: "#fff",
-                padding: "20px 0",
-                display: "flex",
-                flexDirection: "column",
-            }}
-        >
-            <div
-                style={{
-                    padding: "0 20px 25px",
-                    borderBottom: "1px solid #333",
-                }}
-            >
-                <h2 style={{ margin: 0 }}>
-                    FixHub
-                </h2>
-
-                <p
-                    style={{
-                        margin: "6px 0 0",
-                        color: "#aaa",
-                        fontSize: "13px",
-                    }}
-                >
-                    Quản lý dịch vụ sửa chữa
-                </p>
-            </div>
-
-            <nav
-                style={{
-                    padding: "20px 12px",
-                    flex: 1,
-                }}
-            >
-                {menu.map((item) => {
-                    const Icon = item.icon;
-
-                    return (
-                        <NavLink
-                            key={item.to}
-                            to={item.to}
-                            end={item.to === "/customer" || item.to === "/employee"}
-                            style={({ isActive }) => ({
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "12px",
-                                padding: "12px",
-                                marginBottom: "6px",
-                                color: isActive ? "#fff" : "#aaa",
-                                background: isActive ? "#2a2a2a" : "transparent",
-                                textDecoration: "none",
-                                borderRadius: "6px",
-                            })}
-                        >
-                            <Icon size={18} />
-                            <span>{item.label}</span>
-                        </NavLink>
-                    );
-                })}
-            </nav>
-
-            <div
-                style={{
-                    padding: "12px",
-                    borderTop: "1px solid #333",
-                }}
-            >
+        <aside className={`sidebar${collapsed ? " sidebar-collapsed" : ""}`}>
+            <div className="sidebar-top">
+                <div className="sidebar-logo" title="FIXHUB">FIXHUB</div>
                 <button
+                    className="sidebar-toggle"
                     type="button"
-                    onClick={onLogout}
-                    style={{
-                        width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        padding: "12px",
-                        border: "none",
-                        background: "transparent",
-                        color: "#aaa",
-                        cursor: "pointer",
-                        textAlign: "left",
-                    }}
+                    onClick={() => setCollapsed((value) => !value)}
+                    aria-label={collapsed ? "Mở thanh công cụ" : "Ẩn thanh công cụ"}
+                    title={collapsed ? "Mở thanh công cụ" : "Ẩn thanh công cụ"}
                 >
-                    <LogOut size={18} />
-                    Đăng xuất
+                    {collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
                 </button>
             </div>
+
+            <div className="sidebar-user">
+                <div className="user-name">{roleLabels[role]}</div>
+                {email && <div className="user-email" title={email}>{email}</div>}
+            </div>
+
+            <nav className="sidebar-menu" aria-label="Thanh công cụ">
+                {roleMenus[role].map(({ to, label, icon: Icon, end }) => (
+                    <NavLink
+                        key={to}
+                        to={to}
+                        end={end}
+                        className={({ isActive }) =>
+                            isActive ? "menu-item active" : "menu-item"
+                        }
+                        title={collapsed ? label : undefined}
+                    >
+                        <Icon size={18} aria-hidden="true" />
+                        <span className="menu-label">{label}</span>
+                    </NavLink>
+                ))}
+            </nav>
+
+            <button className="logout-button" onClick={onLogout}>
+                <LogOut size={18} aria-hidden="true" />
+                <span className="logout-label">Đăng xuất</span>
+            </button>
         </aside>
     );
 }
