@@ -11,6 +11,7 @@ import type { LoginRequest, UserInfo } from "../types/auth";
 
 interface AuthContextType {
     user: UserInfo | null;
+    isInitializing: boolean;
     isAuthenticated: boolean;
     login: (data: LoginRequest) => Promise<UserInfo>;
     logout: () => Promise<void>;
@@ -27,19 +28,29 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<UserInfo | null>(null);
+    const [isInitializing, setIsInitializing] = useState(true);
 
     useEffect(() => {
         const token = localStorage.getItem("token");
         const savedUser = localStorage.getItem("user");
 
-        if (token && savedUser) {
-            try {
+        try {
+            if (token && savedUser) {
                 const parsedUser: UserInfo = JSON.parse(savedUser);
+                if (parsedUser.token !== token) {
+                    parsedUser.token = token;
+                    localStorage.setItem("user", JSON.stringify(parsedUser));
+                }
                 setUser(parsedUser);
-            } catch {
+            } else {
                 localStorage.removeItem("token");
                 localStorage.removeItem("user");
             }
+        } catch {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+        } finally {
+            setIsInitializing(false);
         }
     }, []);
 
@@ -100,6 +111,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         <AuthContext.Provider
             value={{
                 user,
+                isInitializing,
                 isAuthenticated: user !== null,
                 login,
                 logout,

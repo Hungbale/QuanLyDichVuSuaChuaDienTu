@@ -11,17 +11,16 @@ import {
 import { useAuth } from "../../context/AuthContext";
 
 import {
-    getCustomersApi,
-    updateCustomerApi,
+    getMyCustomerProfileApi,
+    updateMyCustomerProfileApi,
 } from "../../api/customerApi";
 
 import type { Customer } from "../../types/customer";
 
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^0\d{9}$/;
 
 function EditProfile() {
-    const { user, updateUser } = useAuth();
+    const { user } = useAuth();
 
     const [customer, setCustomer] =
         useState<Customer | null>(null);
@@ -34,56 +33,38 @@ function EditProfile() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    const [error, setError] = useState("");
-    const [success, setSuccess] = useState("");
+    const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
     useEffect(() => {
         const loadProfile = async () => {
             if (!user) {
-                setError(
-                    "Không tìm thấy thông tin tài khoản."
-                );
+                setNotice({ type: "error", message: "Không tìm thấy thông tin tài khoản." });
                 setLoading(false);
                 return;
             }
 
             try {
-                setError("");
-
-                const customers = await getCustomersApi();
-
-                const currentCustomer = customers.find(
-                    (item) =>
-                        item.user.email === user.email
-                );
-
-                if (!currentCustomer) {
-                    setError(
-                        "Không tìm thấy thông tin khách hàng tương ứng với tài khoản."
-                    );
-                    return;
-                }
+                const currentCustomer = await getMyCustomerProfileApi();
 
                 setCustomer(currentCustomer);
 
                 setFullName(currentCustomer.fullName);
-                setEmail(currentCustomer.user.email);
+                setEmail(user.email);
                 setPhone(currentCustomer.phone);
                 setAddress(currentCustomer.address);
             } catch (error: any) {
                 console.error(error);
+                setCustomer(null);
 
-                setError(
-                    error.response?.data?.message ||
-                    "Không thể tải thông tin cá nhân."
-                );
+                setNotice({ type: "error", message: error.response?.data?.message ||
+                    "Không thể tải thông tin cá nhân." });
             } finally {
                 setLoading(false);
             }
         };
 
         loadProfile();
-    }, [user]);
+    }, [user?.id]);
 
     const handleChange = (
         event: ChangeEvent<HTMLInputElement>
@@ -94,9 +75,7 @@ function EditProfile() {
             setFullName(value);
         }
 
-        if (name === "email") {
-            setEmail(value);
-        }
+        if (name === "email") setEmail(value);
 
         if (name === "phone") {
             setPhone(value);
@@ -106,8 +85,7 @@ function EditProfile() {
             setAddress(value);
         }
 
-        setSuccess("");
-        setError("");
+        setNotice(null);
     };
 
     const handleSubmit = async (
@@ -118,66 +96,46 @@ function EditProfile() {
         if (!customer) {
             return;
         }
-
-        setError("");
-        setSuccess("");
+        setNotice(null);
 
         const fullNameValue = fullName.trim();
-        const emailValue = email.trim();
         const phoneValue = phone.trim();
         const addressValue = address.trim();
 
         if (!fullNameValue) {
-            setError("Vui lòng nhập họ và tên.");
+            setNotice({ type: "error", message: "Vui lòng nhập họ và tên." });
             return;
         }
 
-        if (!emailValue) {
-            setError("Vui lòng nhập email.");
-            return;
-        }
-
-        if (!emailRegex.test(emailValue)) {
-            setError(
-                "Email không đúng định dạng."
-            );
-            return;
-        }
+        const currentEmail = user?.email ?? "";
 
         if (!phoneValue) {
-            setError(
-                "Vui lòng nhập số điện thoại."
-            );
+            setNotice({ type: "error", message: "Vui lòng nhập số điện thoại." });
             return;
         }
 
         if (!phoneRegex.test(phoneValue)) {
-            setError(
-                "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0."
-            );
+            setNotice({ type: "error", message: "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0." });
             return;
         }
 
         if (!addressValue) {
-            setError("Vui lòng nhập địa chỉ.");
+            setNotice({ type: "error", message: "Vui lòng nhập địa chỉ." });
             return;
         }
 
         setSaving(true);
+        setNotice(null);
 
         try {
-            const updatedCustomer =
-                await updateCustomerApi(
-                    customer.id,
-                    {
+            const updatedCustomer = await updateMyCustomerProfileApi({
                         customerCode:
                             customer.customerCode,
                         fullName: fullNameValue,
-                        email: emailValue,
+                        email: currentEmail,
                         phone: phoneValue,
                         address: addressValue,
-                    }
-                );
+                    });
 
             setCustomer(updatedCustomer);
 
@@ -185,9 +143,7 @@ function EditProfile() {
                 updatedCustomer.fullName
             );
 
-            setEmail(
-                updatedCustomer.user.email
-            );
+            setEmail(currentEmail);
 
             setPhone(
                 updatedCustomer.phone
@@ -196,26 +152,13 @@ function EditProfile() {
             setAddress(
                 updatedCustomer.address
             );
-
-            /*
-             * Cập nhật email trong AuthContext
-             * và localStorage để hệ thống sử dụng
-             * email mới sau khi người dùng chỉnh sửa.
-             */
-            updateUser({
-                email: updatedCustomer.user.email,
-            });
-
-            setSuccess(
-                "Cập nhật thông tin thành công."
-            );
+            const message = "Cập nhật thông tin thành công.";
+            setNotice({ type: "success", message });
         } catch (error: any) {
             console.error(error);
 
-            setError(
-                error.response?.data?.message ||
-                "Cập nhật thông tin thất bại."
-            );
+            const message = error.response?.data?.message || "Cập nhật thông tin thất bại.";
+            setNotice({ type: "error", message });
         } finally {
             setSaving(false);
         }
@@ -270,15 +213,9 @@ function EditProfile() {
                             </div>
                         </div>
 
-                        {error && (
-                            <div className="error-message">
-                                {error}
-                            </div>
-                        )}
-
-                        {success && (
-                            <div className="success-message">
-                                {success}
+                        {notice && (
+                            <div className={notice.type === "success" ? "success-message" : "error-message"}>
+                                {notice.message}
                             </div>
                         )}
 
@@ -323,9 +260,7 @@ function EditProfile() {
                                             type="email"
                                             name="email"
                                             value={email}
-                                            onChange={
-                                                handleChange
-                                            }
+                                            readOnly
                                             placeholder="Nhập email"
                                         />
                                     </div>

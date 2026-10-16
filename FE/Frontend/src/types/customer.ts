@@ -1,6 +1,6 @@
 export interface CustomerUser {
     id: number;
-    email: string;
+    email?: string;
     role: string;
 }
 
@@ -8,11 +8,12 @@ export interface Customer {
     id: number;
     customerCode: string;
     fullName: string;
+    email: string;
     phone: string;
     address: string;
     repairCount: number;
     status: "ACTIVE" | "LOCKED";
-    user: CustomerUser;
+    user?: CustomerUser;
 }
 
 export interface CustomerRequest {
