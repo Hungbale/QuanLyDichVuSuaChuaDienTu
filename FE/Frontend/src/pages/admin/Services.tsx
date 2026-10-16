@@ -524,7 +524,7 @@ function AdminServices() {
     };
 
     return (
-        <div className="management-page">
+        <div className="management-page admin-services-page">
             {/* ========================= */}
             {/* HEADER */}
             {/* ========================= */}
@@ -579,7 +579,7 @@ function AdminServices() {
             {/* SERVICE FILTER */}
             {/* ========================= */}
 
-            <div className="filter-panel">
+            <div className="filter-panel service-admin-filters">
                 <div className="filter-field">
                     <label>
                         Tìm kiếm dịch vụ
@@ -672,6 +672,15 @@ function AdminServices() {
             {/* ========================= */}
             {/* SERVICE TABLE */}
             {/* ========================= */}
+
+            <section className="service-admin-list-section" aria-labelledby="service-list-title">
+                <div className="service-admin-section-heading">
+                    <div>
+                        <h2 id="service-list-title">Danh sách dịch vụ</h2>
+                        <p>Tra cứu, cập nhật trạng thái và quản lý dịch vụ sửa chữa.</p>
+                    </div>
+                    {!loading && <span>{services.length} dịch vụ</span>}
+                </div>
 
             <div className="table-container">
                 {loading ? (
@@ -808,6 +817,8 @@ function AdminServices() {
                 )}
             </div>
 
+            </section>
+
             {showServiceDetails && (
                 <div
                     className="modal-overlay"
@@ -886,13 +897,14 @@ function AdminServices() {
             {/* CATEGORY SECTION */}
             {/* ========================= */}
 
+            <section className="service-category-section" aria-labelledby="service-category-title">
             <div
                 className="page-header"
                 style={{
                     marginTop: "40px",
                 }}
             >
-                <h2>
+                <h2 id="service-category-title">
                     Quản lý danh mục
                 </h2>
 
@@ -999,6 +1011,8 @@ function AdminServices() {
                     </table>
                 )}
             </div>
+
+            </section>
 
             {/* ========================= */}
             {/* SERVICE MODAL */}

@@ -6,6 +6,7 @@ import type {
 
 export interface EmployeeSearchParams {
     keyword?: string;
+    status?: string;
 }
 
 export type EmployeeProfileUpdateRequest = Pick<EmployeeRequest, "fullName" | "email" | "phone"> & { password?: string };

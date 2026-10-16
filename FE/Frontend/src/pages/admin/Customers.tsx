@@ -89,6 +89,19 @@ function AdminCustomers() {
     const openCreateModal = () => {
         resetForm();
 
+        const usedCodes = new Set(customers.map((customer) => customer.customerCode));
+        const highestNumber = customers.reduce((highest, customer) => {
+            const match = customer.customerCode.match(/^(?:KH)?(\d+)$/i);
+            return match ? Math.max(highest, Number(match[1])) : highest;
+        }, 0);
+        let nextNumber = highestNumber + 1;
+        let customerCode = `KH${String(nextNumber).padStart(6, "0")}`;
+        while (usedCodes.has(customerCode)) {
+            nextNumber += 1;
+            customerCode = `KH${String(nextNumber).padStart(6, "0")}`;
+        }
+        setForm((current) => ({ ...current, customerCode }));
+
         setError("");
         setSuccess("");
 
@@ -272,7 +285,7 @@ function AdminCustomers() {
     };
 
     return (
-        <div className="management-page">
+        <div className="management-page admin-people-page admin-customers-page">
             {/* ========================= */}
             {/* HEADER */}
             {/* ========================= */}
@@ -314,7 +327,7 @@ function AdminCustomers() {
             {/* FILTER */}
             {/* ========================= */}
 
-            <div className="filter-panel">
+            <div className="filter-panel admin-people-filters">
                 <div className="filter-field">
                     <label>
                         Tìm kiếm
@@ -378,7 +391,15 @@ function AdminCustomers() {
             {/* TABLE */}
             {/* ========================= */}
 
-            <div className="table-container">
+            <section className="admin-people-list-section">
+                <div className="admin-people-section-heading">
+                    <div>
+                        <h2>Danh sách khách hàng</h2>
+                        <p>Theo dõi hồ sơ, trạng thái và thao tác quản lý.</p>
+                    </div>
+                    <span>{customers.length} khách hàng</span>
+                </div>
+                <div className="table-container">
                 {loading ? (
                     <div className="table-state">
                         Đang tải danh sách khách hàng...
@@ -502,6 +523,7 @@ function AdminCustomers() {
                     </table>
                 )}
             </div>
+            </section>
 
             {/* ========================= */}
             {/* MODAL */}
@@ -554,9 +576,16 @@ function AdminCustomers() {
                                         editingCustomer !==
                                         null
                                     }
+                                    readOnly={!editingCustomer}
                                     placeholder="VD: KH000001"
                                     required
                                 />
+
+                                {!editingCustomer && (
+                                    <small style={{ color: "#777283" }}>
+                                        Mã khách hàng được tự tạo khi mở biểu mẫu.
+                                    </small>
+                                )}
 
                                 {editingCustomer && (
                                     <small

@@ -17,6 +17,7 @@ function AdminEmployees() {
     const [employees, setEmployees] = useState<Employee[]>([]);
 
     const [keyword, setKeyword] = useState("");
+    const [statusFilter, setStatusFilter] = useState("");
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -47,6 +48,7 @@ function AdminEmployees() {
 
             const data = await getEmployeesApi({
                 keyword: keyword.trim() || undefined,
+                status: statusFilter || undefined,
             });
 
             setEmployees(data);
@@ -84,6 +86,19 @@ function AdminEmployees() {
 
     const openCreateModal = () => {
         resetForm();
+
+        const usedCodes = new Set(employees.map((employee) => employee.employeeCode));
+        const highestNumber = employees.reduce((highest, employee) => {
+            const match = employee.employeeCode.match(/^(?:NV)?(\d+)$/i);
+            return match ? Math.max(highest, Number(match[1])) : highest;
+        }, 0);
+        let nextNumber = highestNumber + 1;
+        let employeeCode = `NV${String(nextNumber).padStart(3, "0")}`;
+        while (usedCodes.has(employeeCode)) {
+            nextNumber += 1;
+            employeeCode = `NV${String(nextNumber).padStart(3, "0")}`;
+        }
+        setForm((current) => ({ ...current, employeeCode }));
 
         setError("");
         setSuccess("");
@@ -312,7 +327,7 @@ function AdminEmployees() {
     };
 
     return (
-        <div className="management-page">
+        <div className="management-page admin-people-page admin-employees-page">
             {/* HEADER */}
 
             <div className="management-header page-header">
@@ -348,7 +363,7 @@ function AdminEmployees() {
 
             {/* FILTER */}
 
-            <div className="filter-panel">
+            <div className="filter-panel admin-people-filters">
                 <div className="filter-field">
                     <label htmlFor="employee-keyword">
                         Tìm kiếm
@@ -364,6 +379,19 @@ function AdminEmployees() {
                         onKeyDown={handleSearchKeyDown}
                         placeholder="Mã, tên, email, số điện thoại..."
                     />
+                </div>
+
+                <div className="filter-field">
+                    <label htmlFor="employee-status">Trạng thái</label>
+                    <select
+                        id="employee-status"
+                        value={statusFilter}
+                        onChange={(event) => setStatusFilter(event.target.value)}
+                    >
+                        <option value="">Tất cả</option>
+                        <option value="ACTIVE">Đang hoạt động</option>
+                        <option value="LOCKED">Đã khóa</option>
+                    </select>
                 </div>
 
                 <div
@@ -384,7 +412,15 @@ function AdminEmployees() {
 
             {/* TABLE */}
 
-            <div className="table-container">
+            <section className="admin-people-list-section">
+                <div className="admin-people-section-heading">
+                    <div>
+                        <h2>Danh sách nhân viên</h2>
+                        <p>Theo dõi hồ sơ, trạng thái và thao tác quản lý.</p>
+                    </div>
+                    <span>{employees.length} nhân viên</span>
+                </div>
+                <div className="table-container">
                 {loading ? (
                     <div className="table-state">
                         Đang tải danh sách nhân viên...
@@ -491,6 +527,7 @@ function AdminEmployees() {
                     </table>
                 )}
             </div>
+            </section>
 
             {/* MODAL */}
 
@@ -533,9 +570,16 @@ function AdminEmployees() {
                                     disabled={
                                         !!editingEmployee
                                     }
+                                    readOnly={!editingEmployee}
                                     placeholder="VD: NV001"
                                     required
                                 />
+
+                                {!editingEmployee && (
+                                    <small style={{ color: "#777283" }}>
+                                        Mã nhân viên được tự tạo khi mở biểu mẫu.
+                                    </small>
+                                )}
 
                                 {editingEmployee && (
                                     <small
