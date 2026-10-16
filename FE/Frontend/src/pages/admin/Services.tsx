@@ -13,6 +13,7 @@ import {
     changeServiceStatusApi,
     createServiceApi,
     deleteServiceApi,
+    getServiceByIdApi,
     getServicesApi,
     updateServiceApi,
 } from "../../api/serviceApi";
@@ -46,6 +47,13 @@ function AdminServices() {
     // =========================
 
     const [showServiceModal, setShowServiceModal] =
+        useState(false);
+
+    const [showServiceDetails, setShowServiceDetails] =
+        useState(false);
+    const [serviceDetails, setServiceDetails] =
+        useState<ServiceItem | null>(null);
+    const [loadingServiceDetails, setLoadingServiceDetails] =
         useState(false);
 
     const [editingService, setEditingService] =
@@ -166,6 +174,27 @@ function AdminServices() {
         setSuccess("");
 
         setShowServiceModal(true);
+    };
+
+    const openServiceDetails = async (service: ServiceItem) => {
+        setShowServiceDetails(true);
+        setServiceDetails(null);
+        setLoadingServiceDetails(true);
+        setError("");
+
+        try {
+            const details = await getServiceByIdApi(service.id);
+            setServiceDetails(details);
+        } catch (error: any) {
+            console.error(error);
+            setError(
+                error.response?.data?.message ||
+                    "Không thể tải thông tin dịch vụ."
+            );
+            setShowServiceDetails(false);
+        } finally {
+            setLoadingServiceDetails(false);
+        }
     };
 
     const closeServiceModal = () => {
@@ -728,6 +757,15 @@ function AdminServices() {
                                                 <button
                                                     className="secondary-button"
                                                     onClick={() =>
+                                                        openServiceDetails(service)
+                                                    }
+                                                >
+                                                    Chi tiết
+                                                </button>
+
+                                                <button
+                                                    className="secondary-button"
+                                                    onClick={() =>
                                                         openEditServiceModal(
                                                             service
                                                         )
@@ -769,6 +807,80 @@ function AdminServices() {
                     </table>
                 )}
             </div>
+
+            {showServiceDetails && (
+                <div
+                    className="modal-overlay"
+                    onClick={() => setShowServiceDetails(false)}
+                >
+                    <section
+                        className="modal customer-modal service-details-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="service-details-title"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="modal-header">
+                            <h2 id="service-details-title">Thông tin dịch vụ</h2>
+                            <button
+                                className="modal-close"
+                                type="button"
+                                aria-label="Đóng"
+                                onClick={() => setShowServiceDetails(false)}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {loadingServiceDetails ? (
+                            <div className="table-state">
+                                Đang tải thông tin dịch vụ...
+                            </div>
+                        ) : serviceDetails ? (
+                            <dl className="service-details-list">
+                                <div>
+                                    <dt>Mã dịch vụ</dt>
+                                    <dd>{serviceDetails.serviceCode}</dd>
+                                </div>
+                                <div>
+                                    <dt>Tên dịch vụ</dt>
+                                    <dd>{serviceDetails.name}</dd>
+                                </div>
+                                <div>
+                                    <dt>Danh mục</dt>
+                                    <dd>{serviceDetails.category.name}</dd>
+                                </div>
+                                <div>
+                                    <dt>Giá dịch vụ</dt>
+                                    <dd>{serviceDetails.price.toLocaleString("vi-VN")} đ</dd>
+                                </div>
+                                <div>
+                                    <dt>Trạng thái</dt>
+                                    <dd>
+                                        {serviceDetails.status === "ACTIVE"
+                                            ? "Đang hoạt động"
+                                            : "Ngừng hoạt động"}
+                                    </dd>
+                                </div>
+                                <div className="service-details-description">
+                                    <dt>Mô tả</dt>
+                                    <dd>{serviceDetails.description || "Chưa có mô tả."}</dd>
+                                </div>
+                            </dl>
+                        ) : null}
+
+                        <div className="modal-actions">
+                            <button
+                                type="button"
+                                className="primary-button"
+                                onClick={() => setShowServiceDetails(false)}
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            )}
 
             {/* ========================= */}
             {/* CATEGORY SECTION */}

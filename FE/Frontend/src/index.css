@@ -440,6 +440,48 @@ th {
     overflow-y: auto;
 }
 
+.service-details-modal {
+    max-width: 640px;
+}
+
+.service-details-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0;
+}
+
+.service-details-list > div {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f9fafb;
+}
+
+.service-details-list dt {
+    margin-bottom: 6px;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.service-details-list dd {
+    margin: 0;
+    color: #111827;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.service-details-description {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 540px) {
+    .service-details-list {
+        grid-template-columns: 1fr;
+    }
+}
+
 
 /* =========================================================
    AUTH PAGE
