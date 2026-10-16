@@ -242,3 +242,32 @@ Body dùng cho `POST` và `PUT` (cần `categoryId` của danh mục đang hoạ
 ```
 
 `name` không được để trống; `categoryId` và `price` là bắt buộc; `price` phải lớn hơn hoặc bằng 0. Khi thêm thành công, backend tự tạo `serviceCode` và đặt trạng thái ban đầu là `ACTIVE`.
+
+### Thêm danh mục trước khi thêm dịch vụ
+
+Tất cả request dưới đây dùng base URL `http://localhost:8080` và cần token admin để tạo dữ liệu.
+
+1. Tạo danh mục bằng `POST /api/categories`, gửi Bearer token admin và JSON:
+
+```json
+{
+  "name": "Sửa chữa laptop"
+}
+```
+
+Thành công trả `201 Created` cùng danh mục vừa tạo, ví dụ có `id` và `status: "ACTIVE"`. Lưu lại `id` này.
+
+2. Nếu danh mục đã có, có thể tìm ID bằng `GET /api/categories` (cần đăng nhập; có thể lọc `?status=ACTIVE`).
+
+3. Tạo dịch vụ bằng `POST /api/services`, dùng Bearer token admin và đặt `categoryId` bằng ID danh mục ở bước 1 hoặc 2:
+
+```json
+{
+  "name": "Thay quạt laptop",
+  "categoryId": 1,
+  "price": 150000,
+  "description": "Thay quạt tản nhiệt laptop"
+}
+```
+
+Người dùng FE sẽ chọn tên danh mục trên giao diện; FE gửi `categoryId` tương ứng trong request, không yêu cầu người dùng tự nhập ID.
