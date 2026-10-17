@@ -1,7 +1,6 @@
 import {
     ArrowUpRight,
     CalendarDays,
-    CalendarPlus,
     CreditCard,
     ClipboardCheck,
     FileText,
@@ -19,12 +18,6 @@ const customerSections = [
         description: "Xem các dịch vụ đang được cung cấp.",
         path: "/customer/services",
         icon: Wrench,
-    },
-    {
-        title: "Đặt lịch sửa chữa",
-        description: "Gửi yêu cầu đặt lịch tiếp nhận thiết bị.",
-        path: "/customer/book-appointment",
-        icon: CalendarPlus,
     },
     {
         title: "Lịch hẹn của tôi",
@@ -85,8 +78,8 @@ function CustomerDashboard() {
                     <h1>Xin chào, chào mừng bạn trở lại</h1>
                     <p>Đặt lịch, theo dõi sửa chữa và quản lý dịch vụ của bạn.</p>
                 </div>
-                <Link className="dashboard-hero-link" to="/customer/book-appointment">
-                    Đặt lịch ngay <ArrowUpRight size={18} />
+                <Link className="dashboard-hero-link" to="/customer/services">
+                    Xem dịch vụ <ArrowUpRight size={18} />
                 </Link>
             </section>
 

@@ -148,7 +148,7 @@ function CustomerServices() {
                                     <span>Giá tham khảo</span>
                                     <strong>Từ {service.price.toLocaleString("vi-VN")} đ</strong>
                                 </div>
-                                <Link className="service-book-link" to="/customer/book-appointment">
+                                <Link className="service-book-link" to={`/customer/book-appointment?serviceId=${service.id}`}>
                                     <CalendarPlus size={17} /> Đặt lịch
                                 </Link>
                             </article>
@@ -244,7 +244,7 @@ function CustomerServices() {
                                 <p>{service.description || "Liên hệ FIXHUB để biết thêm thông tin về dịch vụ."}</p>
                                 <div className="service-catalog-card-footer">
                                     <strong>{service.price.toLocaleString("vi-VN")} đ</strong>
-                                    <Link to="/customer/book-appointment" aria-label={`Đặt lịch ${service.name}`}>
+                                    <Link to={`/customer/book-appointment?serviceId=${service.id}`} aria-label={`Đặt lịch ${service.name}`}>
                                         Đặt lịch <ArrowRight size={16} />
                                     </Link>
                                 </div>
