@@ -25,6 +25,7 @@ import type {
 } from "../../types/service";
 
 function AdminServices() {
+    const [activeTab, setActiveTab] = useState<"services" | "categories">("services");
     // =========================
     // SERVICE STATE
     // =========================
@@ -539,23 +540,15 @@ function AdminServices() {
                 </div>
 
                 <div className="action-buttons">
-                    <button
-                        className="secondary-button"
-                        onClick={
-                            openCreateCategoryModal
-                        }
-                    >
-                        + Thêm danh mục
-                    </button>
-
-                    <button
-                        className="primary-button"
-                        onClick={
-                            openCreateServiceModal
-                        }
-                    >
-                        + Thêm dịch vụ
-                    </button>
+                    {activeTab === "categories" ? (
+                        <button className="primary-button" onClick={openCreateCategoryModal}>
+                            + Thêm danh mục
+                        </button>
+                    ) : (
+                        <button className="primary-button" onClick={openCreateServiceModal}>
+                            + Thêm dịch vụ
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -575,9 +568,33 @@ function AdminServices() {
                 </div>
             )}
 
+            <div className="service-management-tabs" role="tablist" aria-label="Nội dung quản lý dịch vụ">
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "services"}
+                    className={activeTab === "services" ? "service-management-tab active" : "service-management-tab"}
+                    onClick={() => setActiveTab("services")}
+                >
+                    Dịch vụ <span>{services.length}</span>
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "categories"}
+                    className={activeTab === "categories" ? "service-management-tab active" : "service-management-tab"}
+                    onClick={() => setActiveTab("categories")}
+                >
+                    Danh mục <span>{categories.length}</span>
+                </button>
+            </div>
+
             {/* ========================= */}
             {/* SERVICE FILTER */}
             {/* ========================= */}
+
+            {activeTab === "services" && (
+                <>
 
             <div className="filter-panel service-admin-filters">
                 <div className="filter-field">
@@ -819,6 +836,9 @@ function AdminServices() {
 
             </section>
 
+                </>
+            )}
+
             {showServiceDetails && (
                 <div
                     className="modal-overlay"
@@ -896,6 +916,9 @@ function AdminServices() {
             {/* ========================= */}
             {/* CATEGORY SECTION */}
             {/* ========================= */}
+
+            {activeTab === "categories" && (
+                <>
 
             <section className="service-category-section" aria-labelledby="service-category-title">
             <div
@@ -1013,6 +1036,9 @@ function AdminServices() {
             </div>
 
             </section>
+
+                </>
+            )}
 
             {/* ========================= */}
             {/* SERVICE MODAL */}
