@@ -369,3 +369,121 @@ Admin được gọi các API quản trị ngoài những API chung, gồm:
 - **Hồ sơ có liên kết:** GET /api/employees/me, GET/PUT /api/customers/me và GET /api/repair-tickets/history/me được phân quyền cho admin nếu tài khoản admin có hồ sơ employee/customer tương ứng.
 
 `PUT /api/employees/me` chỉ cấp cho role `EMPLOYEE`; admin muốn sửa nhân viên dùng `PUT /api/employees/{id}`. Các endpoint hồ sơ `/me` chỉ trả hồ sơ nếu tài khoản có hồ sơ customer/employee tương ứng.
+
+## Hướng dẫn test quản lý sửa chữa bằng Postman
+
+Các ví dụ dưới đây dùng backend tại `http://localhost:8080`. Đảm bảo backend và database đang chạy trước khi test. Tạo một Postman Environment với biến `baseUrl` = `http://localhost:8080` để dùng lại trong các URL.
+
+### Thiết lập xác thực
+
+Hầu hết API quản lý sửa chữa cần JWT. Đăng nhập tại `POST {{baseUrl}}/api/auth/login` với tài khoản nhân viên hoặc khách hàng:
+
+```json
+{
+  "email": "email-tai-khoan",
+  "password": "mat-khau"
+}
+```
+
+Sao chép trường `token` trong response. Với mỗi request cần xác thực, chọn **Authorization → Bearer Token** và dán token tương ứng. Dùng token nhân viên khi thao tác nội bộ; dùng token khách hàng sở hữu phiếu khi xem/duyệt báo giá hoặc thanh toán. Các request có JSON body chọn **Body → raw → JSON**.
+
+### 1. Nhân viên tạo phiếu sửa chữa
+
+`POST {{baseUrl}}/api/repair-tickets`
+
+```json
+{
+  "customerId": 1,
+  "device": "iPhone 13",
+  "receivedDate": "2026-10-17",
+  "status": "Tiếp nhận",
+  "technicianId": 1
+}
+```
+
+`customerId` phải là ID hồ sơ khách hàng có sẵn. `technicianId` là tùy chọn, có thể bỏ trường này hoặc đặt `null`. Lưu trường `id` trong response làm `ticketId`.
+
+### 2. Tra cứu phiếu sửa chữa
+
+- `GET {{baseUrl}}/api/repair-tickets` — danh sách phiếu.
+- `GET {{baseUrl}}/api/repair-tickets?keyword=PS00001` — tìm theo mã phiếu, tên khách, mã khách hoặc số điện thoại khách. Tìm kiếm hiện không xét tên thiết bị.
+- `GET {{baseUrl}}/api/repair-tickets/{{ticketId}}` — chi tiết một phiếu.
+- `GET {{baseUrl}}/api/repair-tickets/history/me` — lịch sử của khách đang đăng nhập (dùng token khách hàng).
+
+### 3. Nhân viên lập báo giá
+
+`POST {{baseUrl}}/api/repair-tickets/{{ticketId}}/quote`
+
+```json
+{
+  "items": [
+    {
+      "name": "Thay màn hình",
+      "quantity": 1,
+      "unitPrice": 1500000
+    },
+    {
+      "name": "Công sửa chữa",
+      "quantity": 1,
+      "unitPrice": 200000
+    }
+  ]
+}
+```
+
+Lưu `id` trong response làm `quoteId`. Mỗi phiếu chỉ tạo được một báo giá.
+
+### 4. Khách xem và quyết định báo giá
+
+Đổi sang token khách hàng sở hữu phiếu:
+
+- `GET {{baseUrl}}/api/repair-tickets/{{ticketId}}/quote` — xem báo giá.
+- `PATCH {{baseUrl}}/api/quotes/{{quoteId}}/decision` — chấp nhận báo giá với body:
+
+```json
+{
+  "decision": "ACCEPTED"
+}
+```
+
+Có thể dùng `"REJECTED"` để từ chối. Khách chỉ được xem/quyết định báo giá của phiếu thuộc mình. Chỉ báo giá trạng thái `SENT` mới quyết định được.
+
+### 5. Khách tạo thanh toán
+
+Vẫn dùng token khách hàng sở hữu phiếu. Báo giá phải được chấp nhận trước.
+
+`POST {{baseUrl}}/api/repair-tickets/{{ticketId}}/payments`
+
+```json
+{
+  "method": "BANK_TRANSFER"
+}
+```
+
+`method` nhận `BANK_TRANSFER` hoặc `CASH`. Response trả `id` thanh toán và trạng thái `PENDING`; lưu `id` đó làm `paymentId`.
+
+### 6. Nhân viên xác nhận đã nhận tiền
+
+Sau khi thực tế nhận/kiểm tra tiền, đổi sang token nhân viên hoặc admin rồi gọi:
+
+`PATCH {{baseUrl}}/api/payments/{{paymentId}}/confirm`
+
+Request không cần body. Thành công sẽ trả trạng thái `PAID`.
+
+### 7. Kiểm tra lịch sử thanh toán
+
+`GET {{baseUrl}}/api/repair-tickets/{{ticketId}}/payments`
+
+Khách chỉ xem được lịch sử thanh toán của phiếu thuộc mình; nhân viên/admin có thể tra cứu theo phiếu.
+
+### Trình tự và lỗi thường gặp
+
+Luồng đầy đủ: **nhân viên tạo phiếu → nhân viên tạo báo giá → khách chấp nhận báo giá → khách tạo thanh toán → nhân viên xác nhận đã nhận tiền**.
+
+- `401 Unauthorized`: thiếu hoặc sai JWT.
+- `403 Forbidden`: sai vai trò hoặc khách không sở hữu phiếu.
+- `404 Not Found`: ID khách hàng, phiếu, báo giá hoặc thanh toán không tồn tại.
+- `409 Conflict`: phiếu đã có báo giá, báo giá không còn `SENT`, hoặc báo giá chưa `ACCEPTED` khi tạo thanh toán.
+- `Required request body is missing`: chọn **Body → raw → JSON** và gửi đúng JSON cho request `POST`/`PATCH` có body. Endpoint xác nhận thanh toán không cần body.
+
+`ticketId`, `quoteId` và `paymentId` là các trường `id` số trả về từ lần tạo tương ứng; chúng không phải mã hiển thị như `PS00001` hay `BG000001`.
