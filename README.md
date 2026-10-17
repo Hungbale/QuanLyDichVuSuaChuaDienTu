@@ -271,3 +271,34 @@ Thành công trả `201 Created` cùng danh mục vừa tạo, ví dụ có `id`
 ```
 
 Người dùng FE sẽ chọn tên danh mục trên giao diện; FE gửi `categoryId` tương ứng trong request, không yêu cầu người dùng tự nhập ID.
+
+## 11. Đặt lịch sửa chữa
+
+Base URL local: `http://localhost:8080`. Đăng nhập trước, sau đó gửi JWT trong header `Authorization: Bearer <token>`. Customer, employee hoặc admin có thể tạo lịch; chỉ employee và admin được xem danh sách lịch.
+
+### Tạo lịch
+
+**POST** `/api/appointments`
+
+`serviceId` phải là ID của dịch vụ đang hoạt động. Có thể lấy danh sách dịch vụ từ `GET /api/services`.
+
+```json
+{
+  "device": "Laptop Dell Inspiron",
+  "serviceId": 1,
+  "appointmentDate": "2026-10-20",
+  "appointmentTime": "09:30:00",
+  "serviceMethod": "STORE_DROP_OFF",
+  "contactPhone": "0901234567",
+  "problemDescription": "Máy nóng và quạt kêu lớn",
+  "pickupAddress": null
+}
+```
+
+`appointmentDate` dùng định dạng `YYYY-MM-DD` và không được là ngày trong quá khứ. `appointmentTime` dùng định dạng `HH:mm:ss`. `serviceMethod` nhận `STORE_DROP_OFF` (mang máy đến cửa hàng) hoặc `HOME_PICKUP` (nhận máy tại nhà). Với `HOME_PICKUP`, cần điền `pickupAddress`. Số điện thoại phải gồm 10 chữ số và bắt đầu bằng `0`. Thành công trả `201 Created`; trạng thái ban đầu là `PENDING`.
+
+### Xem lịch đã đặt
+
+**GET** `/api/appointments` — employee/admin xem tất cả lịch.
+
+**GET** `/api/appointments?contactPhone=0901234567` — lọc lịch theo số điện thoại liên hệ; endpoint này cũng chỉ dành cho employee/admin.
