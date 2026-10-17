@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import websuachuadientu.dto.AppointmentRequest;
 import websuachuadientu.entity.Appointment;
@@ -29,8 +30,34 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getAll());
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<List<Appointment>> getMine(Authentication authentication) {
+        return ResponseEntity.ok(appointmentService.getByCustomerEmail(authentication.getName()));
+    }
+
     @PostMapping
-    public ResponseEntity<Appointment> create(@Valid @RequestBody AppointmentRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(appointmentService.create(request));
+    public ResponseEntity<Appointment> create(
+            @Valid @RequestBody AppointmentRequest request,
+            Authentication authentication) {
+        boolean customerAccount = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_CUSTOMER".equals(authority.getAuthority()));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(appointmentService.create(request, authentication.getName(), customerAccount));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Appointment> updateMine(
+            @PathVariable Long id,
+            @Valid @RequestBody AppointmentRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(appointmentService.updateByCustomer(id, authentication.getName(), request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> cancelMine(
+            @PathVariable Long id,
+            Authentication authentication) {
+        appointmentService.cancelByCustomer(id, authentication.getName());
+        return ResponseEntity.noContent().build();
     }
 }
