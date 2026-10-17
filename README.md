@@ -302,3 +302,70 @@ Base URL local: `http://localhost:8080`. Đăng nhập trước, sau đó gửi 
 **GET** `/api/appointments` — employee/admin xem tất cả lịch.
 
 **GET** `/api/appointments?contactPhone=0901234567` — lọc lịch theo số điện thoại liên hệ; endpoint này cũng chỉ dành cho employee/admin.
+
+## 12. API được phép theo vai trò
+
+Các endpoint dưới đây dùng base URL `http://localhost:8080`. Ngoại trừ đăng ký/đăng nhập, cần gửi JWT trong header `Authorization: Bearer <token>`. Quyền được áp dụng theo `SecurityConfig` hiện tại.
+
+### Public
+
+| Method | Endpoint | Ghi chú |
+|---|---|---|
+| `POST` | `/api/auth/register` | Đăng ký customer; không cần token |
+| `POST` | `/api/auth/login` | Đăng nhập mọi vai trò; không cần token |
+
+### Endpoint mọi vai trò đã đăng nhập
+
+Các vai trò `CUSTOMER`, `EMPLOYEE`, `ADMIN` đều được gọi:
+
+| Method | Endpoint | Ghi chú |
+|---|---|---|
+| `POST` | `/api/auth/logout` | Đăng xuất token hiện tại |
+| `GET` | `/api/categories`, `/api/categories/{id}` | Xem danh mục |
+| `GET` | `/api/services`, `/api/services/{id}` | Xem dịch vụ |
+| `POST` | `/api/appointments` | Đặt lịch sửa chữa |
+| `GET` | `/api/repair-tickets/{ticketId}/quote` | Customer chỉ xem báo giá của phiếu thuộc mình |
+| `PATCH` | `/api/quotes/{quoteId}/decision` | Customer chỉ quyết định báo giá của phiếu thuộc mình |
+| `GET`, `POST` | `/api/repair-tickets/{ticketId}/payments` | Customer chỉ xem/tạo thanh toán cho phiếu của mình |
+
+### CUSTOMER
+
+Ngoài các endpoint chung ở trên, customer được gọi:
+
+| Method | Endpoint | Ghi chú |
+|---|---|---|
+| `GET`, `PUT` | `/api/customers/me` | Xem/sửa hồ sơ của tài khoản đang đăng nhập |
+| `GET` | `/api/repair-tickets/history/me` | Xem lịch sử sửa chữa của mình |
+
+Customer không được xem danh sách lịch hẹn, quản lý dịch vụ/danh mục, quản lý khách hàng hoặc chỉnh sửa phiếu sửa chữa.
+
+### EMPLOYEE
+
+Ngoài các endpoint chung, employee được gọi:
+
+| Method | Endpoint | Ghi chú |
+|---|---|---|
+| `GET`, `PUT` | `/api/employees/me` | Xem/sửa hồ sơ của mình |
+| `GET` | `/api/appointments` | Xem tất cả lịch; lọc tùy chọn bằng `?contactPhone=0901234567` |
+| `GET` | `/api/customers`, `/api/customers/{id}` | Tra cứu khách hàng |
+| `POST` | `/api/customers` | Tạo hồ sơ/tài khoản customer |
+| `GET`, `POST` | `/api/repair-tickets` | Tra cứu/tạo phiếu sửa chữa |
+| `GET`, `PUT` | `/api/repair-tickets/{id}` | Xem/cập nhật phiếu sửa chữa |
+| `POST` | `/api/repair-tickets/{ticketId}/quote` | Tạo báo giá |
+| `PATCH` | `/api/payments/{paymentId}/confirm` | Xác nhận đã nhận thanh toán |
+
+Employee không được thêm/sửa/xóa dịch vụ hoặc danh mục; quản lý tài khoản nhân viên khác; hoặc sửa hồ sơ customer theo ID/đổi trạng thái customer.
+
+### ADMIN
+
+Admin được gọi các API quản trị ngoài những API chung, gồm:
+
+- **Danh mục:** `POST /api/categories`, `PUT /api/categories/{id}`, `PATCH /api/categories/{id}/status`, `DELETE /api/categories/{id}`.
+- **Dịch vụ:** `POST /api/services`, `PUT /api/services/{id}`, `PATCH /api/services/{id}/status`, `DELETE /api/services/{id}`.
+- **Lịch hẹn:** `GET /api/appointments`.
+- **Khách hàng:** `GET /api/customers`, `GET /api/customers/{id}`, `POST /api/customers`, `PUT /api/customers/{id}`, `PATCH /api/customers/{id}/status`.
+- **Nhân viên:** `GET /api/employees`, `GET /api/employees/{id}`, `POST /api/employees`, `PUT /api/employees/{id}`, `PATCH /api/employees/{id}/status`, `DELETE /api/employees/{id}`.
+- **Sửa chữa, báo giá và thanh toán:** các API quản lý phiếu sửa chữa, tạo báo giá và xác nhận thanh toán như liệt kê ở phần EMPLOYEE.
+- **Hồ sơ có liên kết:** GET /api/employees/me, GET/PUT /api/customers/me và GET /api/repair-tickets/history/me được phân quyền cho admin nếu tài khoản admin có hồ sơ employee/customer tương ứng.
+
+`PUT /api/employees/me` chỉ cấp cho role `EMPLOYEE`; admin muốn sửa nhân viên dùng `PUT /api/employees/{id}`. Các endpoint hồ sơ `/me` chỉ trả hồ sơ nếu tài khoản có hồ sơ customer/employee tương ứng.
