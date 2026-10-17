@@ -2830,6 +2830,12 @@ th {
     margin: 0 0 14px;
 }
 
+.appointment-heading-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 0 12px;
+}
+
 .appointment-results-heading h2 {
     margin-bottom: 4px;
 }

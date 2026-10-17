@@ -1,18 +1,22 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createRepairTicketApi, getRepairTicketsApi, updateRepairTicketApi } from "../../api/repairTicketApi";
-import { getAppointmentsApi } from "../../api/appointmentApi";
+import { createAppointmentApi, getAppointmentsApi } from "../../api/appointmentApi";
 import { getCustomersApi } from "../../api/customerApi";
 import { getEmployeesApi } from "../../api/employeeApi";
-import type { Appointment } from "../../types/appointment";
+import AppointmentForm from "../../components/common/AppointmentForm";
+import { getServicesApi } from "../../api/serviceApi";
+import type { Appointment, AppointmentRequest } from "../../types/appointment";
 import type { Customer } from "../../types/customer";
 import type { Employee } from "../../types/employee";
 import type { RepairTicket, RepairTicketRequest } from "../../types/repairTicket";
+import type { ServiceItem } from "../../types/service";
 
 type RepairsTab = "appointments" | "repairs";
 type TicketForm = { customerId: string; device: string; receivedDate: string; status: string; technicianId: string };
 const emptyForm: TicketForm = { customerId: "", device: "", receivedDate: new Date().toISOString().slice(0, 10), status: "Đã tiếp nhận", technicianId: "" };
 const statusOptions = ["Đã tiếp nhận", "Đang kiểm tra", "Chờ báo giá", "Chờ khách xác nhận", "Đang sửa", "Hoàn thành", "Khách từ chối", "Đã hủy"];
 const errorMessage = (error: any, fallback: string) => error.response?.data?.message || error.response?.data?.error || fallback;
+const emptyAppointment = (): AppointmentRequest => ({ device: "", serviceId: 0, appointmentDate: new Date().toLocaleDateString("en-CA"), appointmentTime: "09:00", serviceMethod: "STORE_DROP_OFF", contactPhone: "", problemDescription: "", pickupAddress: "" });
 
 function AdminRepairs() {
     const [activeTab, setActiveTab] = useState<RepairsTab>("appointments");
@@ -29,6 +33,9 @@ function AdminRepairs() {
     const [editing, setEditing] = useState<RepairTicket | null>(null);
     const [showEditor, setShowEditor] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [showAppointmentEditor, setShowAppointmentEditor] = useState(false);
+    const [appointmentServices, setAppointmentServices] = useState<ServiceItem[]>([]);
+    const [appointmentSaving, setAppointmentSaving] = useState(false);
 
     const loadAppointments = async (contactPhone?: string) => {
         setLoading(true); setError("");
@@ -54,6 +61,28 @@ function AdminRepairs() {
 
     const submitSearch = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void loadTickets(keyword); };
     const openCreate = () => { setEditing(null); setForm(emptyForm); setShowEditor(true); setNotice(""); setError(""); };
+    const openCreateAppointment = async () => {
+        setError(""); setNotice("");
+        try {
+            setAppointmentServices(await getServicesApi({ status: "ACTIVE" }));
+            setShowAppointmentEditor(true);
+        } catch (e: any) {
+            setError(errorMessage(e, "Không thể tải danh sách dịch vụ để tạo lịch hẹn."));
+        }
+    };
+    const saveAppointment = async (request: AppointmentRequest) => {
+        setAppointmentSaving(true); setError(""); setNotice("");
+        try {
+            await createAppointmentApi(request);
+            setShowAppointmentEditor(false);
+            setNotice("Đã tạo lịch hẹn cho khách.");
+            await loadAppointments(phone);
+        } catch (e: any) {
+            setError(errorMessage(e, "Không thể tạo lịch hẹn."));
+        } finally {
+            setAppointmentSaving(false);
+        }
+    };
     const openEdit = (ticket: RepairTicket) => {
         setEditing(ticket); setShowEditor(true); setNotice(""); setError("");
         setForm({ customerId: String(ticket.customerId), device: ticket.device, receivedDate: ticket.receivedDate, status: ticket.status, technicianId: ticket.technicianId ? String(ticket.technicianId) : "" });
@@ -93,13 +122,15 @@ function AdminRepairs() {
                         <div className="appointment-form-group"><label htmlFor="admin-appointment-phone">Số điện thoại khách hàng</label><input id="admin-appointment-phone" type="search" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Để trống để xem tất cả lịch đặt" /></div>
                         <div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => { setPhone(""); void loadAppointments(); }} disabled={loading}>Xóa lọc</button><button className="primary-button" type="submit" disabled={loading}>{loading ? "Đang tải..." : "Tìm lịch đặt"}</button></div>
                     </form>
+                    {notice && <div className="success-message" role="status">{notice}</div>}
+                    <div className="appointment-heading-actions"><button className="primary-button" type="button" onClick={() => void openCreateAppointment()}>Tạo lịch hẹn</button></div>
                     <div className="appointment-results-heading"><div><h2>Danh sách lịch khách đặt</h2><p>{loading ? "Đang lấy dữ liệu..." : `${appointments.length} lịch đặt`}</p></div></div>
                     {loading ? <div className="appointment-panel table-state">Đang tải lịch đặt...</div> : appointments.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>Không tìm thấy lịch đặt</h2><p>Thử tìm bằng số điện thoại khác hoặc xóa bộ lọc.</p></div> : (
                         <div className="appointment-panel appointment-table-container"><table className="appointment-table"><thead><tr><th>Lịch hẹn</th><th>Khách liên hệ</th><th>Thiết bị / dịch vụ</th><th>Hình thức</th><th>Trạng thái</th><th>Mô tả tình trạng</th></tr></thead><tbody>
                             {appointments.map((a) => <tr key={a.id}><td><strong>#{a.id}</strong><span>{new Date(`${a.appointmentDate}T00:00:00`).toLocaleDateString("vi-VN")}</span><span>{a.appointmentTime.slice(0, 5)}</span></td><td><strong>{a.contactPhone}</strong></td><td><strong>{a.device}</strong><span>{a.service?.name || "Dịch vụ sửa chữa"}</span></td><td><span>{a.serviceMethod === "HOME_PICKUP" ? "Nhận tại nhà" : "Mang đến cửa hàng"}</span>{a.pickupAddress && <span>{a.pickupAddress}</span>}</td><td><span className={`appointment-status ${a.status.toLowerCase()}`}>{a.status === "PENDING" ? "Chờ xác nhận" : a.status === "CANCELLED" ? "Đã hủy" : a.status}</span></td><td className="appointment-description-cell">{a.problemDescription}</td></tr>)}
                         </tbody></table></div>
                     )}
-                </section>
+                                    {showAppointmentEditor && <div className="modal-overlay" onClick={() => setShowAppointmentEditor(false)}><section className="modal customer-modal admin-appointment-create-modal" role="dialog" aria-modal="true" aria-labelledby="admin-create-appointment-title" onClick={(event) => event.stopPropagation()}><div className="modal-header"><h2 id="admin-create-appointment-title">Tạo lịch hẹn cho khách</h2><button className="modal-close" type="button" aria-label="Đóng" onClick={() => setShowAppointmentEditor(false)}>×</button></div>{appointmentServices.length === 0 ? <div className="appointment-empty-state"><p>Chưa có dịch vụ đang hoạt động để đặt lịch.</p></div> : <AppointmentForm services={appointmentServices} initialValues={emptyAppointment()} submitting={appointmentSaving} submitLabel="Tạo lịch hẹn" onSubmit={saveAppointment} onCancel={() => setShowAppointmentEditor(false)} />}</section></div>}</section>
             ) : (
                 <section role="tabpanel" className="admin-appointments-panel">
                     {error && <div className="error-message" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}
