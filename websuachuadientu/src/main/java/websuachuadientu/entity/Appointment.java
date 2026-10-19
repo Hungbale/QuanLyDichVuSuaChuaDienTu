@@ -31,6 +31,10 @@ public class Appointment {
     @JoinColumn(name = "customer_id")
     private Customer customer;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "technician_id")
+    private Employee technician;
+
     @Column(nullable = false)
     private LocalDate appointmentDate;
 

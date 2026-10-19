@@ -1,4 +1,4 @@
-# Web sửa chữa điện tử – Hướng dẫn API tài khoản
+# Web sửa chữa điện tử – Hướng dẫn API backend
 
 
 ## Hướng dẫn cấu hình môi trường và chạy Backend
@@ -205,7 +205,7 @@ Gửi token Bearer hiện tại. Thành công trả `200 OK`; token được đ�
 ## 8. Quyền truy cập tóm tắt
 
 - `ADMIN`: được gọi mọi API.
-- `EMPLOYEE`: được gọi API nghiệp vụ được phân quyền; API quản lý nhân viên yêu cầu `ADMIN`.
+- `EMPLOYEE`: xử lý lịch/phiếu được giao và báo giá, tiến độ, thanh toán liên quan; API quản lý nhân viên yêu cầu `ADMIN`.
 - `CUSTOMER`: xem dịch vụ/danh mục, đặt lịch, xem lịch sử, quản lý hồ sơ `/api/customers/me`, và thao tác báo giá/thanh toán trên dữ liệu của chính mình.
 - Đăng ký và đăng nhập là public; logout cần đăng nhập. API khác bị từ chối nếu role không được cấp.
 
@@ -218,203 +218,165 @@ Gửi token Bearer hiện tại. Thành công trả `200 OK`; token được đ�
 
 Mật khẩu không được API trả về; backend lưu mật khẩu bằng BCrypt.
 
-## 10. Quản lý dịch vụ
+## 10. Dùng API nghiệp vụ: đặt lịch, dịch vụ và sửa chữa
 
-Các API dưới đây dùng base URL `http://localhost:8080`. Cần đăng nhập để lấy JWT rồi gửi header `Authorization: Bearer <token>`. `ADMIN`, `EMPLOYEE` và `CUSTOMER` được xem danh sách/chi tiết; chỉ `ADMIN` được thêm, sửa và xóa dịch vụ.
+Phần này mô tả luồng API hiện có trong backend. Base URL mặc định là http://localhost:8080. Ví dụ dưới đây giả định Postman có Environment với biến baseUrl = http://localhost:8080.
 
-| Method | Endpoint | Chức năng |
-|---|---|---|
-| `GET` | `/api/services` | Xem danh sách; lọc tùy chọn bằng `?keyword=...`, `?status=ACTIVE` hoặc `?categoryId=1` |
-| `GET` | `/api/services/{id}` | Xem chi tiết dịch vụ |
-| `POST` | `/api/services` | Thêm dịch vụ (admin) |
-| `PUT` | `/api/services/{id}` | Sửa dịch vụ (admin) |
-| `DELETE` | `/api/services/{id}` | Xóa dịch vụ (admin), thành công trả `204 No Content` |
+### 10.1. Đăng nhập và gửi token
 
-Body dùng cho `POST` và `PUT` (cần `categoryId` của danh mục đang hoạt động):
+Đăng nhập bằng POST {{baseUrl}}/api/auth/login:
 
-```json
+~~~json
 {
-  "name": "Thay quạt laptop",
-  "categoryId": 1,
-  "price": 150000,
-  "description": "Thay quạt tản nhiệt laptop"
-}
-```
-
-`name` không được để trống; `categoryId` và `price` là bắt buộc; `price` phải lớn hơn hoặc bằng 0. Khi thêm thành công, backend tự tạo `serviceCode` và đặt trạng thái ban đầu là `ACTIVE`.
-
-### Thêm danh mục trước khi thêm dịch vụ
-
-Tất cả request dưới đây dùng base URL `http://localhost:8080` và cần token admin để tạo dữ liệu.
-
-1. Tạo danh mục bằng `POST /api/categories`, gửi Bearer token admin và JSON:
-
-```json
-{
-  "name": "Sửa chữa laptop"
-}
-```
-
-Thành công trả `201 Created` cùng danh mục vừa tạo, ví dụ có `id` và `status: "ACTIVE"`. Lưu lại `id` này.
-
-2. Nếu danh mục đã có, có thể tìm ID bằng `GET /api/categories` (cần đăng nhập; có thể lọc `?status=ACTIVE`).
-
-3. Tạo dịch vụ bằng `POST /api/services`, dùng Bearer token admin và đặt `categoryId` bằng ID danh mục ở bước 1 hoặc 2:
-
-```json
-{
-  "name": "Thay quạt laptop",
-  "categoryId": 1,
-  "price": 150000,
-  "description": "Thay quạt tản nhiệt laptop"
-}
-```
-
-Người dùng FE sẽ chọn tên danh mục trên giao diện; FE gửi `categoryId` tương ứng trong request, không yêu cầu người dùng tự nhập ID.
-
-## 11. Đặt lịch sửa chữa
-
-Base URL local: `http://localhost:8080`. Đăng nhập trước, sau đó gửi JWT trong header `Authorization: Bearer <token>`. Customer, employee hoặc admin có thể tạo lịch; chỉ employee và admin được xem danh sách lịch.
-
-### Tạo lịch
-
-**POST** `/api/appointments`
-
-`serviceId` phải là ID của dịch vụ đang hoạt động. Có thể lấy danh sách dịch vụ từ `GET /api/services`.
-
-```json
-{
-  "device": "Laptop Dell Inspiron",
-  "serviceId": 1,
-  "appointmentDate": "2026-10-20",
-  "appointmentTime": "09:30:00",
-  "serviceMethod": "STORE_DROP_OFF",
-  "contactPhone": "0901234567",
-  "problemDescription": "Máy nóng và quạt kêu lớn",
-  "pickupAddress": null
-}
-```
-
-`appointmentDate` dùng định dạng `YYYY-MM-DD` và không được là ngày trong quá khứ. `appointmentTime` dùng định dạng `HH:mm:ss`. `serviceMethod` nhận `STORE_DROP_OFF` (mang máy đến cửa hàng) hoặc `HOME_PICKUP` (nhận máy tại nhà). Với `HOME_PICKUP`, cần điền `pickupAddress`. Số điện thoại phải gồm 10 chữ số và bắt đầu bằng `0`. Thành công trả `201 Created`; trạng thái ban đầu là `PENDING`.
-
-### Xem lịch đã đặt
-
-**GET** `/api/appointments` — employee/admin xem tất cả lịch.
-
-**GET** `/api/appointments?contactPhone=0901234567` — lọc lịch theo số điện thoại liên hệ; endpoint này cũng chỉ dành cho employee/admin.
-
-## 12. API được phép theo vai trò
-
-Các endpoint dưới đây dùng base URL `http://localhost:8080`. Ngoại trừ đăng ký/đăng nhập, cần gửi JWT trong header `Authorization: Bearer <token>`. Quyền được áp dụng theo `SecurityConfig` hiện tại.
-
-### Public
-
-| Method | Endpoint | Ghi chú |
-|---|---|---|
-| `POST` | `/api/auth/register` | Đăng ký customer; không cần token |
-| `POST` | `/api/auth/login` | Đăng nhập mọi vai trò; không cần token |
-
-### Endpoint mọi vai trò đã đăng nhập
-
-Các vai trò `CUSTOMER`, `EMPLOYEE`, `ADMIN` đều được gọi:
-
-| Method | Endpoint | Ghi chú |
-|---|---|---|
-| `POST` | `/api/auth/logout` | Đăng xuất token hiện tại |
-| `GET` | `/api/categories`, `/api/categories/{id}` | Xem danh mục |
-| `GET` | `/api/services`, `/api/services/{id}` | Xem dịch vụ |
-| `POST` | `/api/appointments` | Đặt lịch sửa chữa |
-| `GET` | `/api/repair-tickets/{ticketId}/quote` | Customer chỉ xem báo giá của phiếu thuộc mình |
-| `PATCH` | `/api/quotes/{quoteId}/decision` | Customer chỉ quyết định báo giá của phiếu thuộc mình |
-| `GET`, `POST` | `/api/repair-tickets/{ticketId}/payments` | Customer chỉ xem/tạo thanh toán cho phiếu của mình |
-
-### CUSTOMER
-
-Ngoài các endpoint chung ở trên, customer được gọi:
-
-| Method | Endpoint | Ghi chú |
-|---|---|---|
-| `GET`, `PUT` | `/api/customers/me` | Xem/sửa hồ sơ của tài khoản đang đăng nhập |
-| `GET` | `/api/repair-tickets/history/me` | Xem lịch sử sửa chữa của mình |
-
-Customer không được xem danh sách lịch hẹn, quản lý dịch vụ/danh mục, quản lý khách hàng hoặc chỉnh sửa phiếu sửa chữa.
-
-### EMPLOYEE
-
-Ngoài các endpoint chung, employee được gọi:
-
-| Method | Endpoint | Ghi chú |
-|---|---|---|
-| `GET`, `PUT` | `/api/employees/me` | Xem/sửa hồ sơ của mình |
-| `GET` | `/api/appointments` | Xem tất cả lịch; lọc tùy chọn bằng `?contactPhone=0901234567` |
-| `GET` | `/api/customers`, `/api/customers/{id}` | Tra cứu khách hàng |
-| `POST` | `/api/customers` | Tạo hồ sơ/tài khoản customer |
-| `GET`, `POST` | `/api/repair-tickets` | Tra cứu/tạo phiếu sửa chữa |
-| `GET`, `PUT` | `/api/repair-tickets/{id}` | Xem/cập nhật phiếu sửa chữa |
-| `POST` | `/api/repair-tickets/{ticketId}/quote` | Tạo báo giá |
-| `PATCH` | `/api/payments/{paymentId}/confirm` | Xác nhận đã nhận thanh toán |
-
-Employee không được thêm/sửa/xóa dịch vụ hoặc danh mục; quản lý tài khoản nhân viên khác; hoặc sửa hồ sơ customer theo ID/đổi trạng thái customer.
-
-### ADMIN
-
-Admin được gọi các API quản trị ngoài những API chung, gồm:
-
-- **Danh mục:** `POST /api/categories`, `PUT /api/categories/{id}`, `PATCH /api/categories/{id}/status`, `DELETE /api/categories/{id}`.
-- **Dịch vụ:** `POST /api/services`, `PUT /api/services/{id}`, `PATCH /api/services/{id}/status`, `DELETE /api/services/{id}`.
-- **Lịch hẹn:** `GET /api/appointments`.
-- **Khách hàng:** `GET /api/customers`, `GET /api/customers/{id}`, `POST /api/customers`, `PUT /api/customers/{id}`, `PATCH /api/customers/{id}/status`.
-- **Nhân viên:** `GET /api/employees`, `GET /api/employees/{id}`, `POST /api/employees`, `PUT /api/employees/{id}`, `PATCH /api/employees/{id}/status`, `DELETE /api/employees/{id}`.
-- **Sửa chữa, báo giá và thanh toán:** các API quản lý phiếu sửa chữa, tạo báo giá và xác nhận thanh toán như liệt kê ở phần EMPLOYEE.
-- **Hồ sơ có liên kết:** GET /api/employees/me, GET/PUT /api/customers/me và GET /api/repair-tickets/history/me được phân quyền cho admin nếu tài khoản admin có hồ sơ employee/customer tương ứng.
-
-`PUT /api/employees/me` chỉ cấp cho role `EMPLOYEE`; admin muốn sửa nhân viên dùng `PUT /api/employees/{id}`. Các endpoint hồ sơ `/me` chỉ trả hồ sơ nếu tài khoản có hồ sơ customer/employee tương ứng.
-
-## Hướng dẫn test quản lý sửa chữa bằng Postman
-
-Các ví dụ dưới đây dùng backend tại `http://localhost:8080`. Đảm bảo backend và database đang chạy trước khi test. Tạo một Postman Environment với biến `baseUrl` = `http://localhost:8080` để dùng lại trong các URL.
-
-### Thiết lập xác thực
-
-Hầu hết API quản lý sửa chữa cần JWT. Đăng nhập tại `POST {{baseUrl}}/api/auth/login` với tài khoản nhân viên hoặc khách hàng:
-
-```json
-{
-  "email": "email-tai-khoan",
+  "email": "email-dang-nhap",
   "password": "mat-khau"
 }
-```
+~~~
 
-Sao chép trường `token` trong response. Với mỗi request cần xác thực, chọn **Authorization → Bearer Token** và dán token tương ứng. Dùng token nhân viên khi thao tác nội bộ; dùng token khách hàng sở hữu phiếu khi xem/duyệt báo giá hoặc thanh toán. Các request có JSON body chọn **Body → raw → JSON**.
+Sao chép trường token từ response. Với mỗi request cần đăng nhập, chọn Authorization → Bearer Token rồi dán token. Có ba vai trò:
 
-### 1. Nhân viên tạo phiếu sửa chữa
+| Vai trò | Dùng cho |
+|---|---|
+| CUSTOMER | Đặt lịch, xem lịch và phiếu của mình, duyệt báo giá, tạo và xem thanh toán của mình |
+| EMPLOYEE | Xem lịch; xử lý phiếu, báo giá, ảnh tiến độ và thanh toán của những phiếu được giao cho mình |
+| ADMIN | Quản lý danh mục/dịch vụ, xem và xử lý toàn bộ dữ liệu, phân công lịch |
 
-`POST {{baseUrl}}/api/repair-tickets`
+Đăng ký public tạo tài khoản CUSTOMER. Tài khoản EMPLOYEE do admin tạo; tài khoản ADMIN được cấu hình khi chạy ứng dụng.
 
-```json
+### 10.2. Quản lý danh mục và dịch vụ
+
+Khách và nhân viên chỉ cần đọc danh mục/dịch vụ đang hoạt động để chọn dịch vụ khi đặt lịch. Chỉ admin được tạo, sửa, bật/tắt hoặc xóa.
+
+#### Danh mục
+
+| Method | URL | Quyền | Tác dụng |
+|---|---|---|---|
+| GET | /api/categories | CUSTOMER, EMPLOYEE, ADMIN | Liệt kê; thêm ?status=ACTIVE hoặc INACTIVE để lọc |
+| GET | /api/categories/{categoryId} | CUSTOMER, EMPLOYEE, ADMIN | Xem chi tiết |
+| POST | /api/categories | ADMIN | Tạo danh mục |
+| PUT | /api/categories/{categoryId} | ADMIN | Đổi tên |
+| PATCH | /api/categories/{categoryId}/status | ADMIN | Đảo trạng thái ACTIVE/INACTIVE; không có body |
+| DELETE | /api/categories/{categoryId} | ADMIN | Xóa nếu chưa được dịch vụ nào sử dụng |
+
+Tạo danh mục — POST /api/categories, Body raw JSON:
+
+~~~json
 {
-  "customerId": 1,
-  "device": "iPhone 13",
-  "receivedDate": "2026-10-17",
-  "status": "Tiếp nhận",
-  "technicianId": 1
+  "name": "Sửa chữa điện thoại"
 }
-```
+~~~
 
-`customerId` phải là ID hồ sơ khách hàng có sẵn. `technicianId` là tùy chọn, có thể bỏ trường này hoặc đặt `null`. Lưu trường `id` trong response làm `ticketId`.
+Tên là bắt buộc và không được trùng tên danh mục khác.
 
-### 2. Tra cứu phiếu sửa chữa
+#### Dịch vụ
 
-- `GET {{baseUrl}}/api/repair-tickets` — danh sách phiếu.
-- `GET {{baseUrl}}/api/repair-tickets?keyword=PS00001` — tìm theo mã phiếu, tên khách, mã khách hoặc số điện thoại khách. Tìm kiếm hiện không xét tên thiết bị.
-- `GET {{baseUrl}}/api/repair-tickets/{{ticketId}}` — chi tiết một phiếu.
-- `GET {{baseUrl}}/api/repair-tickets/history/me` — lịch sử của khách đang đăng nhập (dùng token khách hàng).
+| Method | URL | Quyền | Tác dụng |
+|---|---|---|---|
+| GET | /api/services | CUSTOMER, EMPLOYEE, ADMIN | Liệt kê và lọc |
+| GET | /api/services/{serviceId} | CUSTOMER, EMPLOYEE, ADMIN | Xem chi tiết |
+| POST | /api/services | ADMIN | Tạo dịch vụ |
+| PUT | /api/services/{serviceId} | ADMIN | Cập nhật thông tin |
+| PATCH | /api/services/{serviceId}/status | ADMIN | Đảo trạng thái ACTIVE/INACTIVE; không có body |
+| DELETE | /api/services/{serviceId} | ADMIN | Xóa dịch vụ |
 
-### 3. Nhân viên lập báo giá
+GET /api/services hỗ trợ query params keyword, status và categoryId. Ví dụ: GET {{baseUrl}}/api/services?status=ACTIVE&categoryId=1.
 
-`POST {{baseUrl}}/api/repair-tickets/{{ticketId}}/quote`
+Tạo dịch vụ — POST /api/services:
 
-```json
+~~~json
+{
+  "name": "Thay màn hình điện thoại",
+  "categoryId": 1,
+  "price": 1500000,
+  "description": "Giá tham khảo, báo giá cuối cùng được lập sau khi kiểm tra máy"
+}
+~~~
+
+name, categoryId và price là bắt buộc; price phải lớn hơn hoặc bằng 0. Mã dịch vụ và trạng thái ACTIVE do backend tạo. Danh mục phải tồn tại và đang hoạt động. PUT dùng cùng cấu trúc; categoryId phải là danh mục đang hoạt động nếu chuyển dịch vụ sang danh mục khác.
+
+### 10.3. Khách đặt lịch sửa chữa
+
+Đảm bảo dịch vụ khách chọn đang ACTIVE. Khách gọi POST {{baseUrl}}/api/appointments với Bearer Token CUSTOMER, Body raw JSON:
+
+~~~json
+{
+  "device": "iPhone 13",
+  "serviceId": 1,
+  "appointmentDate": "2026-10-20",
+  "appointmentTime": "14:30:00",
+  "serviceMethod": "STORE_DROP_OFF",
+  "contactPhone": "0912345678",
+  "problemDescription": "Màn hình bị nứt, cảm ứng vẫn hoạt động",
+  "pickupAddress": null
+}
+~~~
+
+Đầu vào:
+
+- device: bắt buộc, tối đa 200 ký tự.
+- serviceId: ID số của dịch vụ ACTIVE.
+- appointmentDate: ngày hiện tại hoặc ngày tương lai, định dạng YYYY-MM-DD.
+- appointmentTime: giờ dạng HH:mm:ss.
+- serviceMethod: STORE_DROP_OFF hoặc HOME_PICKUP.
+- contactPhone: số điện thoại 10 chữ số bắt đầu bằng 0.
+- problemDescription: bắt buộc, tối đa 5000 ký tự.
+- pickupAddress: tối đa 500 ký tự; bắt buộc khi serviceMethod là HOME_PICKUP.
+
+Khi khách đặt lịch, backend gắn lịch với tài khoản khách, tự chọn kỹ thuật viên ACTIVE đang có ít việc nhất và tránh người đã có lịch trùng ngày/giờ. Response 201 trả appointment id, trạng thái CONFIRMED, dịch vụ và kỹ thuật viên được giao. Không gửi appointment id hoặc technician id khi tạo lịch; backend tự sinh/chọn.
+
+Công việc lịch hẹn đã được giao cho nhân viên: GET {{baseUrl}}/api/appointments/assigned/me (Bearer Token EMPLOYEE). API chỉ trả lịch gán cho tài khoản đang đăng nhập, kèm thông tin khách, dịch vụ, thiết bị, ngày giờ, hình thức nhận máy và mô tả sự cố. Phiếu sửa chữa được tạo tự động cùng lúc với việc phân công; nhân viên dùng GET {{baseUrl}}/api/repair-tickets để xem phiếu được giao.
+
+Lịch của khách:
+
+- GET {{baseUrl}}/api/appointments/me — CUSTOMER xem lịch của mình.
+- PUT {{baseUrl}}/api/appointments/{appointmentId} — CUSTOMER sửa lịch PENDING của mình; body giống lúc tạo.
+- DELETE {{baseUrl}}/api/appointments/{appointmentId} — CUSTOMER hủy lịch PENDING của mình.
+
+Lưu ý: lịch đặt bởi CUSTOMER được xác nhận/phân công ngay nên đã ở trạng thái CONFIRMED; endpoint sửa/hủy hiện chỉ cho lịch PENDING. Nhân viên/admin xem tất cả lịch bằng GET {{baseUrl}}/api/appointments; có thể lọc bằng ?contactPhone=0912345678. Admin có thể gọi PATCH {{baseUrl}}/api/appointments/{appointmentId}/assign cho lịch PENDING; endpoint tự gán kỹ thuật viên ít việc nhất, không cần body.
+
+### 10.4. Nhân viên xem phiếu sửa chữa được giao
+
+Khi khách CUSTOMER đặt lịch thành công, backend tự chọn kỹ thuật viên ACTIVE ít việc nhất và tự tạo phiếu sửa chữa trong cùng luồng. Response đặt lịch vẫn có appointment id; phiếu có repairTicket id riêng. Phiếu mới có status SCHEDULED, được gắn với khách hàng, dịch vụ và kỹ thuật viên từ lịch. Không cần gọi POST /api/repair-tickets để tạo lại phiếu cho lịch mới.
+
+Nhân viên xem lịch làm việc, gồm ngày giờ, hình thức nhận máy, địa chỉ lấy máy và mô tả lỗi:
+
+GET {{baseUrl}}/api/appointments/assigned/me — Bearer Token EMPLOYEE.
+
+Nhân viên xem phiếu được giao để lập báo giá và cập nhật tiến độ:
+
+GET {{baseUrl}}/api/repair-tickets — Bearer Token EMPLOYEE. Dùng trường id trong response làm {ticketId} cho các API báo giá, tiến độ, thanh toán và theo dõi. Không nhầm với id của lịch hẹn.
+
+EMPLOYEE hoặc ADMIN vẫn có thể tạo phiếu thủ công bằng POST {{baseUrl}}/api/repair-tickets; ví dụ có thể tạo từ lịch CONFIRMED cũ chưa có phiếu. Lịch mới khách vừa đặt đã tự có phiếu nên không gọi POST lần nữa. Ví dụ:
+
+~~~json
+{
+  "appointmentId": 12,
+  "device": "iPhone 13",
+  "receivedDate": "2026-10-20",
+  "status": "SCHEDULED"
+}
+~~~
+
+Lịch cũ đã có phiếu thì không tạo thêm phiếu. Phiếu tạo riêng không gắn lịch vẫn hỗ trợ qua POST với customerId, device, receivedDate, status; technicianId và serviceId tùy chọn.
+
+Tra cứu phiếu:
+
+| Request | Quyền và kết quả |
+|---|---|
+| GET /api/repair-tickets | EMPLOYEE chỉ nhận phiếu được giao cho mình; ADMIN nhận tất cả |
+| GET /api/repair-tickets?keyword=PS00012 | Lọc theo mã phiếu, tên/mã khách hoặc số điện thoại; vẫn áp dụng phạm vi nhân viên |
+| GET /api/repair-tickets/{ticketId} | EMPLOYEE chỉ xem phiếu được giao; ADMIN xem mọi phiếu |
+| GET /api/repair-tickets/history/me | CUSTOMER xem lịch sử của mình |
+| GET /api/repair-tickets/{ticketId}/tracking | CUSTOMER xem phiếu của mình; EMPLOYEE xem phiếu được giao; ADMIN xem mọi phiếu |
+
+Nhân viên khác gọi ID phiếu không được giao cho mình sẽ nhận 403. Admin có thể đổi người phụ trách bằng PUT phiếu. PUT /api/repair-tickets/{ticketId} không dùng để đổi status; đổi trạng thái phải dùng API kèm ảnh ở mục 10.6.
+### 10.5. Lập và duyệt báo giá
+
+Chỉ nhân viên đang được giao phiếu hoặc admin lập báo giá. Mỗi phiếu chỉ có một báo giá.
+
+POST {{baseUrl}}/api/repair-tickets/{ticketId}/quote:
+
+~~~json
 {
   "items": [
     {
@@ -429,61 +391,69 @@ Sao chép trường `token` trong response. Với mỗi request cần xác thự
     }
   ]
 }
-```
+~~~
 
-Lưu `id` trong response làm `quoteId`. Mỗi phiếu chỉ tạo được một báo giá.
+items phải có ít nhất một phần tử. Mỗi phần tử cần name, quantity là số nguyên dương và unitPrice không âm. Backend tính lineTotal = quantity × unitPrice và totalAmount; mã báo giá được backend sinh. Phiếu chuyển sang trạng thái chờ khách xác nhận.
 
-### 4. Khách xem và quyết định báo giá
+Xem báo giá — GET {{baseUrl}}/api/repair-tickets/{ticketId}/quote. Khách chỉ xem báo giá của phiếu mình; nhân viên chỉ xem nếu được giao phiếu; admin xem tất cả.
 
-Đổi sang token khách hàng sở hữu phiếu:
+Khách quyết định — PATCH {{baseUrl}}/api/quotes/{quoteId}/decision:
 
-- `GET {{baseUrl}}/api/repair-tickets/{{ticketId}}/quote` — xem báo giá.
-- `PATCH {{baseUrl}}/api/quotes/{{quoteId}}/decision` — chấp nhận báo giá với body:
-
-```json
+~~~json
 {
   "decision": "ACCEPTED"
 }
-```
+~~~
 
-Có thể dùng `"REJECTED"` để từ chối. Khách chỉ được xem/quyết định báo giá của phiếu thuộc mình. Chỉ báo giá trạng thái `SENT` mới quyết định được.
+decision chỉ nhận ACCEPTED hoặc REJECTED. Khách phải là chủ phiếu; nhân viên/admin chỉ thao tác nếu phiếu được giao cho nhân viên đó (admin được toàn quyền). Chỉ báo giá SENT mới quyết định được. Báo giá ACCEPTED cho phép khách tạo thanh toán.
 
-### 5. Khách tạo thanh toán
+### 10.6. Nhân viên cập nhật tiến độ kèm ảnh
 
-Vẫn dùng token khách hàng sở hữu phiếu. Báo giá phải được chấp nhận trước.
+Kỹ thuật viên được giao phiếu cập nhật trạng thái bằng PATCH {{baseUrl}}/api/repair-tickets/{ticketId}/status. Admin cũng có quyền. Chọn Body → form-data:
 
-`POST {{baseUrl}}/api/repair-tickets/{{ticketId}}/payments`
+| Key | Kiểu | Ví dụ |
+|---|---|---|
+| status | Text | Đang sửa |
+| note | Text, không bắt buộc | Đã thay linh kiện, đang kiểm tra máy |
+| images | File | Ảnh JPEG hoặc PNG; thêm nhiều dòng cùng key images |
 
-```json
+Mỗi lần đổi trạng thái bắt buộc có 1–5 ảnh JPEG/PNG, mỗi ảnh tối đa 5 MB. Backend lưu status, ghi chú, thời gian, người cập nhật và ảnh vào database. Ảnh trả về trong tracking dưới dạng dataUri để FE gán vào thuộc tính src của ảnh. Chỉ kỹ thuật viên được giao phiếu hoặc admin được cập nhật.
+
+### 10.7. Khách thanh toán, nhân viên xác nhận
+
+Khách sở hữu phiếu tạo thanh toán sau khi báo giá ACCEPTED — POST {{baseUrl}}/api/repair-tickets/{ticketId}/payments:
+
+~~~json
 {
   "method": "BANK_TRANSFER"
 }
-```
+~~~
 
-`method` nhận `BANK_TRANSFER` hoặc `CASH`. Response trả `id` thanh toán và trạng thái `PENDING`; lưu `id` đó làm `paymentId`.
+method là BANK_TRANSFER hoặc CASH. Backend lấy số tiền từ tổng báo giá; response tạo payment id, amount và status PENDING. Mỗi báo giá chỉ tạo được một giao dịch.
 
-### 6. Nhân viên xác nhận đã nhận tiền
+Xem giao dịch — GET {{baseUrl}}/api/repair-tickets/{ticketId}/payments. Khách chỉ xem phiếu của mình; nhân viên chỉ xem phiếu được giao; admin xem tất cả.
 
-Sau khi thực tế nhận/kiểm tra tiền, đổi sang token nhân viên hoặc admin rồi gọi:
+Sau khi nhận/kiểm tra tiền, nhân viên được giao phiếu hoặc admin gọi PATCH {{baseUrl}}/api/payments/{paymentId}/confirm. Không cần body. Giao dịch chuyển PENDING → PAID. Nhân viên khác không được xác nhận giao dịch của phiếu không thuộc mình.
 
-`PATCH {{baseUrl}}/api/payments/{{paymentId}}/confirm`
+### 10.8. Mã lỗi và thứ tự gọi
 
-Request không cần body. Thành công sẽ trả trạng thái `PAID`.
+Luồng chính:
 
-### 7. Kiểm tra lịch sử thanh toán
+1. Admin tạo danh mục và dịch vụ ACTIVE.
+2. Khách đăng nhập, chọn serviceId và tạo lịch.
+3. Backend tự phân công; lịch trả về CONFIRMED và technician.
+4. Backend tự tạo phiếu và gắn với nhân viên được phân công.
+5. Nhân viên kiểm tra và lập báo giá.
+6. Khách xem/duyệt báo giá.
+7. Khách theo dõi bằng trackingUrl; nhân viên cập nhật trạng thái kèm ảnh.
+8. Khách tạo thanh toán; nhân viên được giao hoặc admin xác nhận đã nhận tiền.
 
-`GET {{baseUrl}}/api/repair-tickets/{{ticketId}}/payments`
+| Mã | Ý nghĩa thường gặp |
+|---|---|
+| 400 | Thiếu/sai trường, ngày hoặc enum; thiếu ảnh khi đổi trạng thái |
+| 401 | Thiếu JWT hoặc JWT không hợp lệ |
+| 403 | Sai vai trò; nhân viên không phụ trách phiếu; khách không sở hữu phiếu |
+| 404 | Không tìm thấy ID khách, dịch vụ, lịch, phiếu, báo giá hoặc thanh toán |
+| 409 | Lịch không còn PENDING, không có nhân viên khả dụng, phiếu đã có báo giá hoặc báo giá chưa ACCEPTED khi thanh toán |
 
-Khách chỉ xem được lịch sử thanh toán của phiếu thuộc mình; nhân viên/admin có thể tra cứu theo phiếu.
-
-### Trình tự và lỗi thường gặp
-
-Luồng đầy đủ: **nhân viên tạo phiếu → nhân viên tạo báo giá → khách chấp nhận báo giá → khách tạo thanh toán → nhân viên xác nhận đã nhận tiền**.
-
-- `401 Unauthorized`: thiếu hoặc sai JWT.
-- `403 Forbidden`: sai vai trò hoặc khách không sở hữu phiếu.
-- `404 Not Found`: ID khách hàng, phiếu, báo giá hoặc thanh toán không tồn tại.
-- `409 Conflict`: phiếu đã có báo giá, báo giá không còn `SENT`, hoặc báo giá chưa `ACCEPTED` khi tạo thanh toán.
-- `Required request body is missing`: chọn **Body → raw → JSON** và gửi đúng JSON cho request `POST`/`PATCH` có body. Endpoint xác nhận thanh toán không cần body.
-
-`ticketId`, `quoteId` và `paymentId` là các trường `id` số trả về từ lần tạo tương ứng; chúng không phải mã hiển thị như `PS00001` hay `BG000001`.
+Dùng các id số trong response làm appointmentId, ticketId, quoteId và paymentId. Mã hiển thị như PS00012 hoặc BG000012 không thay thế id trên URL.

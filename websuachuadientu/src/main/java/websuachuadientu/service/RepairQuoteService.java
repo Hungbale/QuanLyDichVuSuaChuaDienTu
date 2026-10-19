@@ -24,9 +24,10 @@ public class RepairQuoteService {
     private final RepairTicketRepository ticketRepository;
 
     @Transactional
-    public RepairQuoteResponse create(Long ticketId, RepairQuoteRequest request) {
+    public RepairQuoteResponse create(Long ticketId, RepairQuoteRequest request, String email, boolean admin) {
         RepairTicket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu sửa chữa"));
+        ensureAssignedEmployee(ticket, email, admin);
         if (quoteRepository.existsByRepairTicket_Id(ticketId)) {
             throw new IllegalStateException("Phiếu sửa chữa đã có báo giá");
         }
@@ -43,9 +44,10 @@ public class RepairQuoteService {
     }
 
     @Transactional(readOnly = true)
-    public RepairQuoteResponse getByTicketId(Long ticketId) {
+    public RepairQuoteResponse getByTicketId(Long ticketId, String email, boolean admin) {
         RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
                 .orElseThrow(() -> new IllegalArgumentException("Phiếu sửa chữa chưa có báo giá"));
+        ensureAssignedEmployee(quote.getRepairTicket(), email, admin);
         return toResponse(quote);
     }
 
@@ -58,8 +60,9 @@ public class RepairQuoteService {
     }
 
     @Transactional
-    public RepairQuoteResponse decide(Long quoteId, String decision) {
+    public RepairQuoteResponse decide(Long quoteId, String decision, String email, boolean admin) {
         RepairQuote quote = findQuote(quoteId);
+        ensureAssignedEmployee(quote.getRepairTicket(), email, admin);
         if (!"SENT".equals(quote.getStatus())) {
             throw new IllegalStateException("Báo giá không còn ở trạng thái chờ xác nhận");
         }
@@ -84,6 +87,14 @@ public class RepairQuoteService {
         if (ticket.getCustomer() == null || ticket.getCustomer().getUser() == null
                 || !ticket.getCustomer().getUser().getEmail().equalsIgnoreCase(email)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bạn không có quyền truy cập dữ liệu này");
+        }
+    }
+
+    private void ensureAssignedEmployee(RepairTicket ticket, String email, boolean admin) {
+        if (!admin && (ticket.getTechnician() == null || ticket.getTechnician().getUser() == null
+                || !ticket.getTechnician().getUser().getEmail().equalsIgnoreCase(email))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "This repair ticket is assigned to another employee");
         }
     }
 

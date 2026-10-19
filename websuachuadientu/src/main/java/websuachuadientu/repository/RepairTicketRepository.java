@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import websuachuadientu.entity.RepairTicket;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface RepairTicketRepository extends JpaRepository<RepairTicket, Long> {
     @Query("""
@@ -21,4 +22,10 @@ public interface RepairTicketRepository extends JpaRepository<RepairTicket, Long
     List<RepairTicket> search(@Param("keyword") String keyword);
 
     List<RepairTicket> findByCustomer_IdOrderByReceivedDateDescIdDesc(Long customerId);
+
+    long countByTechnician_IdAndStatusNotIn(Long technicianId, List<String> terminalStatuses);
+
+    boolean existsByAppointment_Id(Long appointmentId);
+
+    Optional<RepairTicket> findByAppointment_Id(Long appointmentId);
 }

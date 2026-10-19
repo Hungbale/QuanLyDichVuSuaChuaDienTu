@@ -12,6 +12,10 @@ import websuachuadientu.dto.RepairTicketRequest;
 import websuachuadientu.dto.RepairTicketResponse;
 import websuachuadientu.dto.RepairHistoryResponse;
 import websuachuadientu.service.RepairTicketService;
+import websuachuadientu.service.RepairTrackingService;
+import websuachuadientu.dto.RepairStatusUpdateResponse;
+import websuachuadientu.dto.RepairTrackingResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -22,11 +26,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class RepairTicketController {
     private final RepairTicketService ticketService;
+    private final RepairTrackingService trackingService;
 
     @GetMapping
     public ResponseEntity<List<RepairTicketResponse>> search(
-            @RequestParam(required = false) String keyword) {
-        return ResponseEntity.ok(ticketService.search(keyword));
+            @RequestParam(required = false) String keyword,
+            Authentication authentication) {
+        boolean admin = isAdmin(authentication);
+        return ResponseEntity.ok(ticketService.search(keyword, authentication.getName(), admin));
     }
 
     @GetMapping("/history/me")
@@ -39,8 +46,8 @@ public class RepairTicketController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<RepairTicketResponse> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(ticketService.getById(id));
+    public ResponseEntity<RepairTicketResponse> getById(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(ticketService.getById(id, authentication.getName(), isAdmin(authentication)));
     }
 
     @PostMapping
@@ -51,8 +58,35 @@ public class RepairTicketController {
     @PutMapping("/{id}")
     public ResponseEntity<RepairTicketResponse> update(
             @PathVariable Long id,
-            @Valid @RequestBody RepairTicketRequest request) {
-        return ResponseEntity.ok(ticketService.update(id, request));
+            @Valid @RequestBody RepairTicketRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(ticketService.update(id, request, authentication.getName(), isAdmin(authentication)));
+    }
+
+    @PatchMapping(value = "/{id}/status", consumes = "multipart/form-data")
+    public ResponseEntity<RepairStatusUpdateResponse> updateStatus(
+            @PathVariable Long id,
+            @RequestParam String status,
+            @RequestParam(required = false) String note,
+            @RequestParam("images") List<MultipartFile> images,
+            Authentication authentication) {
+        boolean admin = isAdmin(authentication);
+        return ResponseEntity.ok(trackingService.updateStatus(
+                id, status, note, images, authentication.getName(), admin));
+    }
+
+    @GetMapping("/{id}/tracking")
+    public ResponseEntity<RepairTrackingResponse> getTracking(
+            @PathVariable Long id, Authentication authentication) {
+        boolean customer = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_CUSTOMER".equals(authority.getAuthority()));
+        return ResponseEntity.ok(trackingService.getTracking(
+                id, authentication.getName(), customer, isAdmin(authentication)));
+    }
+
+    private boolean isAdmin(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

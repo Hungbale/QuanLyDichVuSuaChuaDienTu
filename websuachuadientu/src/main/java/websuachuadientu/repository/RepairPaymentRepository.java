@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface RepairPaymentRepository extends JpaRepository<RepairPayment, Long> {
     List<RepairPayment> findByQuote_RepairTicket_IdOrderByCreatedAtDesc(Long ticketId);
+
+    boolean existsByQuote_Id(Long quoteId);
 }

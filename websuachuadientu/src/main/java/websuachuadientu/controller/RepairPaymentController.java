@@ -25,11 +25,8 @@ public class RepairPaymentController {
             @PathVariable Long ticketId,
             @Valid @RequestBody RepairPaymentRequest request,
             Authentication authentication) {
-        if (isCustomer(authentication)) {
-            return ResponseEntity.status(HttpStatus.CREATED).body(
-                    paymentService.initiateForCustomer(ticketId, request, authentication.getName()));
-        }
-        return ResponseEntity.status(HttpStatus.CREATED).body(paymentService.initiate(ticketId, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                paymentService.initiateForCustomer(ticketId, request, authentication.getName()));
     }
 
     @GetMapping("/api/repair-tickets/{ticketId}/payments")
@@ -38,6 +35,9 @@ public class RepairPaymentController {
             Authentication authentication) {
         if (isCustomer(authentication)) {
             return ResponseEntity.ok(paymentService.historyForCustomer(ticketId, authentication.getName()));
+        }
+        if (!isAdmin(authentication)) {
+            return ResponseEntity.ok(paymentService.historyForEmployee(ticketId, authentication.getName()));
         }
         return ResponseEntity.ok(paymentService.history(ticketId));
     }
@@ -49,8 +49,15 @@ public class RepairPaymentController {
 
     // This endpoint is for a payment-provider callback or staff confirmation after funds are received.
     @PatchMapping("/api/payments/{paymentId}/confirm")
-    public ResponseEntity<RepairPaymentResponse> confirmReceived(@PathVariable Long paymentId) {
-        return ResponseEntity.ok(paymentService.confirmReceived(paymentId));
+    public ResponseEntity<RepairPaymentResponse> confirmReceived(
+            @PathVariable Long paymentId, Authentication authentication) {
+        return ResponseEntity.ok(paymentService.confirmReceived(
+                paymentId, authentication.getName(), isAdmin(authentication)));
+    }
+
+    private boolean isAdmin(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

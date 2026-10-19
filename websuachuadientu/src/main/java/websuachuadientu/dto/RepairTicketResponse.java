@@ -7,6 +7,8 @@ public record RepairTicketResponse(
         String ticketCode,
         Long customerId,
         String customerName,
+        Long serviceId,
+        String serviceName,
         String device,
         LocalDate receivedDate,
         String status,

@@ -38,6 +38,14 @@ public class RepairTicket {
     @JoinColumn(name = "technician_id")
     private Employee technician;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "appointment_id", unique = true)
+    private Appointment appointment;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "service_id")
+    private ServiceItem service;
+
     @OneToOne(mappedBy = "repairTicket", fetch = FetchType.LAZY)
     private RepairQuote quote;
 }

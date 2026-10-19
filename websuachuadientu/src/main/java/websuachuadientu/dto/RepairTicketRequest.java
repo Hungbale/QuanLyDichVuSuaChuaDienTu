@@ -11,7 +11,6 @@ import java.time.LocalDate;
 @Getter
 @Setter
 public class RepairTicketRequest {
-    @NotNull
     private Long customerId;
 
     @NotBlank
@@ -26,4 +25,8 @@ public class RepairTicketRequest {
     private String status;
 
     private Long technicianId;
+
+    private Long appointmentId;
+
+    private Long serviceId;
 }
