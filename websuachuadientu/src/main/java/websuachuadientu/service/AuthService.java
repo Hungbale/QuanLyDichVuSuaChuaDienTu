@@ -15,6 +15,7 @@ import websuachuadientu.entity.Customer;
 import websuachuadientu.entity.User;
 import websuachuadientu.repository.CustomerRepository;
 import websuachuadientu.repository.UserRepository;
+import websuachuadientu.repository.EmployeeRepository;
 import websuachuadientu.security.JwtService;
 import websuachuadientu.security.TokenBlacklistService;
 
@@ -24,6 +25,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
+    private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final TokenBlacklistService tokenBlacklistService;
@@ -74,6 +76,17 @@ public class AuthService {
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Email hoặc mật khẩu không đúng");
+        }
+
+        if ("CUSTOMER".equals(user.getRole())
+                && customerRepository.findByUser_Email(user.getEmail())
+                .map(customer -> !"ACTIVE".equals(customer.getStatus())).orElse(true)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer account is locked or inactive");
+        }
+        if ("EMPLOYEE".equals(user.getRole())
+                && employeeRepository.findByUser_Email(user.getEmail())
+                .map(employee -> !"ACTIVE".equals(employee.getStatus())).orElse(true)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Employee account is locked or inactive");
         }
 
         String token = jwtService.generateToken(user);

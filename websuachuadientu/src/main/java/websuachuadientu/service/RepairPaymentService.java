@@ -30,6 +30,10 @@ public class RepairPaymentService {
             throw new IllegalStateException("Cần chấp nhận báo giá trước khi thanh toán");
         }
 
+        if (paymentRepository.existsByQuote_Id(quote.getId())) {
+            throw new IllegalStateException("This quote already has a payment transaction");
+        }
+
         RepairPayment payment = new RepairPayment();
         payment.setQuote(quote);
         payment.setAmount(quote.getTotalAmount());
@@ -73,9 +77,10 @@ public class RepairPaymentService {
     }
 
     @Transactional
-    public RepairPaymentResponse confirmReceived(Long paymentId) {
+    public RepairPaymentResponse confirmReceived(Long paymentId, String email, boolean admin) {
         RepairPayment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy giao dịch thanh toán"));
+        ensureAssignedEmployee(payment.getQuote().getRepairTicket(), email, admin);
         if (!"PENDING".equals(payment.getStatus())) {
             throw new IllegalStateException("Giao dịch này không ở trạng thái chờ thanh toán");
         }
@@ -90,5 +95,21 @@ public class RepairPaymentService {
                 payment.getAmount(), payment.getStatus(), payment.getMethod(),
                 payment.getDueDate(), payment.getCreatedAt(), payment.getPaidAt()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<RepairPaymentResponse> historyForEmployee(Long ticketId, String email) {
+        RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
+                .orElseThrow(() -> new IllegalArgumentException("Repair quote not found"));
+        ensureAssignedEmployee(quote.getRepairTicket(), email, false);
+        return history(ticketId);
+    }
+
+    private void ensureAssignedEmployee(websuachuadientu.entity.RepairTicket ticket, String email, boolean admin) {
+        if (!admin && (ticket.getTechnician() == null || ticket.getTechnician().getUser() == null
+                || !ticket.getTechnician().getUser().getEmail().equalsIgnoreCase(email))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "This repair ticket is assigned to another employee");
+        }
     }
 }

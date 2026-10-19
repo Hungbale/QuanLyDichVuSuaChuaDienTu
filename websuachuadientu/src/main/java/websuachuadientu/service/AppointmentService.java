@@ -6,12 +6,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import websuachuadientu.dto.AppointmentRequest;
+import websuachuadientu.dto.AssignedAppointmentResponse;
 import websuachuadientu.entity.Appointment;
 import websuachuadientu.entity.Customer;
 import websuachuadientu.entity.ServiceItem;
 import websuachuadientu.repository.AppointmentRepository;
 import websuachuadientu.repository.CustomerRepository;
 import websuachuadientu.repository.ServiceItemRepository;
+import websuachuadientu.repository.EmployeeRepository;
+import websuachuadientu.repository.RepairTicketRepository;
+import websuachuadientu.entity.Employee;
 
 import java.util.List;
 
@@ -22,6 +26,9 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final ServiceItemRepository serviceItemRepository;
     private final CustomerRepository customerRepository;
+    private final EmployeeRepository employeeRepository;
+    private final RepairTicketRepository repairTicketRepository;
+    private final RepairTicketService repairTicketService;
 
     public List<Appointment> getAll() {
         return appointmentRepository.findAllByOrderByAppointmentDateAscAppointmentTimeAsc();
@@ -36,6 +43,27 @@ public class AppointmentService {
         return appointmentRepository.findByCustomer_User_EmailOrderByAppointmentDateAscAppointmentTimeAsc(email);
     }
 
+    @Transactional(readOnly = true)
+    public List<AssignedAppointmentResponse> getAssignedToEmployee(String email) {
+        return appointmentRepository.findByTechnician_User_EmailOrderByAppointmentDateAscAppointmentTimeAsc(email)
+                .stream()
+                .map(appointment -> new AssignedAppointmentResponse(
+                        appointment.getId(),
+                        appointment.getCustomer() == null ? null : appointment.getCustomer().getId(),
+                        appointment.getCustomer() == null ? null : appointment.getCustomer().getFullName(),
+                        appointment.getDevice(),
+                        appointment.getService().getId(),
+                        appointment.getService().getName(),
+                        appointment.getAppointmentDate(),
+                        appointment.getAppointmentTime(),
+                        appointment.getServiceMethod(),
+                        appointment.getContactPhone(),
+                        appointment.getProblemDescription(),
+                        appointment.getPickupAddress(),
+                        appointment.getStatus()
+                )).toList();
+    }
+
     @Transactional
     public Appointment create(AppointmentRequest request, String userEmail, boolean customerAccount) {
         Appointment appointment = new Appointment();
@@ -46,7 +74,11 @@ public class AppointmentService {
                     .orElseThrow(() -> new IllegalStateException("Không tìm thấy hồ sơ khách hàng"));
             appointment.setCustomer(customer);
         }
-        return appointmentRepository.save(appointment);
+        appointment = appointmentRepository.save(appointment);
+        if (customerAccount) {
+            return assignLeastBusyTechnician(appointment.getId());
+        }
+        return appointment;
     }
 
     @Transactional
@@ -61,6 +93,47 @@ public class AppointmentService {
         Appointment appointment = getPendingAppointmentForCustomer(appointmentId, userEmail);
         appointment.setStatus("CANCELLED");
         appointmentRepository.save(appointment);
+    }
+
+    @Transactional
+    public Appointment assignLeastBusyTechnician(Long appointmentId) {
+        Appointment appointment = appointmentRepository.findPendingById(appointmentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Appointment was not found or is no longer pending"));
+        if (appointment.getAppointmentDate().isBefore(java.time.LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Past appointments cannot be assigned");
+        }
+        if (appointment.getAppointmentDate().isEqual(java.time.LocalDate.now())
+                && !appointment.getAppointmentTime().isAfter(java.time.LocalTime.now())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Past appointment times cannot be assigned");
+        }
+        List<String> activeAppointmentStatuses = List.of("CONFIRMED", "IN_PROGRESS");
+        List<String> busyAppointmentStatuses = List.of("CONFIRMED", "IN_PROGRESS", "CONVERTED");
+        List<String> terminalTicketStatuses = List.of(
+                "COMPLETED", "Hoàn thành", "CANCELLED", "Khách từ chối");
+
+        Employee technician = employeeRepository.findByStatus("ACTIVE").stream()
+                .filter(employee -> !appointmentRepository
+                        .existsByTechnician_IdAndAppointmentDateAndAppointmentTimeAndStatusIn(
+                                employee.getId(), appointment.getAppointmentDate(),
+                                appointment.getAppointmentTime(), busyAppointmentStatuses))
+                .min(java.util.Comparator
+                        .comparingLong((Employee employee) ->
+                                repairTicketRepository.countByTechnician_IdAndStatusNotIn(
+                                        employee.getId(), terminalTicketStatuses)
+                                        + appointmentRepository.countUnconvertedWorkByTechnician(
+                                        employee.getId(), activeAppointmentStatuses))
+                        .thenComparing(Employee::getId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "No active technician is available for this time slot"));
+
+        appointment.setTechnician(technician);
+        appointment.setStatus("CONFIRMED");
+        Appointment assigned = appointmentRepository.save(appointment);
+        repairTicketService.createForAppointment(assigned);
+        return assigned;
     }
 
     private Appointment getPendingAppointmentForCustomer(Long appointmentId, String userEmail) {

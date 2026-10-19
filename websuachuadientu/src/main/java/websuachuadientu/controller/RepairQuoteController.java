@@ -23,8 +23,10 @@ public class RepairQuoteController {
     @PostMapping("/api/repair-tickets/{ticketId}/quote")
     public ResponseEntity<RepairQuoteResponse> create(
             @PathVariable Long ticketId,
-            @Valid @RequestBody RepairQuoteRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(quoteService.create(ticketId, request));
+            @Valid @RequestBody RepairQuoteRequest request,
+            Authentication authentication) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(quoteService.create(
+                ticketId, request, authentication.getName(), isAdmin(authentication)));
     }
 
     @GetMapping("/api/repair-tickets/{ticketId}/quote")
@@ -34,7 +36,8 @@ public class RepairQuoteController {
         if (isCustomer(authentication)) {
             return ResponseEntity.ok(quoteService.getByTicketIdForCustomer(ticketId, authentication.getName()));
         }
-        return ResponseEntity.ok(quoteService.getByTicketId(ticketId));
+        return ResponseEntity.ok(quoteService.getByTicketId(
+                ticketId, authentication.getName(), isAdmin(authentication)));
     }
 
     @PatchMapping("/api/quotes/{quoteId}/decision")
@@ -46,12 +49,18 @@ public class RepairQuoteController {
             return ResponseEntity.ok(quoteService.decideForCustomer(
                     quoteId, request.decision(), authentication.getName()));
         }
-        return ResponseEntity.ok(quoteService.decide(quoteId, request.decision()));
+        return ResponseEntity.ok(quoteService.decide(
+                quoteId, request.decision(), authentication.getName(), isAdmin(authentication)));
     }
 
     private boolean isCustomer(Authentication authentication) {
         return authentication.getAuthorities().stream()
                 .anyMatch(authority -> "ROLE_CUSTOMER".equals(authority.getAuthority()));
+    }
+
+    private boolean isAdmin(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

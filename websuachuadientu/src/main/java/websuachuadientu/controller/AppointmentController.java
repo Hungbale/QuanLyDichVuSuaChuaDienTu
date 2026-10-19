@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import websuachuadientu.dto.AppointmentRequest;
+import websuachuadientu.dto.AssignedAppointmentResponse;
 import websuachuadientu.entity.Appointment;
 import websuachuadientu.service.AppointmentService;
 
@@ -35,6 +36,11 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getByCustomerEmail(authentication.getName()));
     }
 
+    @GetMapping("/assigned/me")
+    public ResponseEntity<List<AssignedAppointmentResponse>> getAssignedToMe(Authentication authentication) {
+        return ResponseEntity.ok(appointmentService.getAssignedToEmployee(authentication.getName()));
+    }
+
     @PostMapping
     public ResponseEntity<Appointment> create(
             @Valid @RequestBody AppointmentRequest request,
@@ -59,5 +65,10 @@ public class AppointmentController {
             Authentication authentication) {
         appointmentService.cancelByCustomer(id, authentication.getName());
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/assign")
+    public ResponseEntity<Appointment> assign(@PathVariable Long id) {
+        return ResponseEntity.ok(appointmentService.assignLeastBusyTechnician(id));
     }
 }
