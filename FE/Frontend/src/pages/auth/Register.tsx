@@ -23,6 +23,72 @@ import { registerApi } from "../../api/authApi";
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^0\d{9}$/;
 
+function getRegistrationErrorMessage(error: unknown): string {
+    const requestError = error as {
+        message?: string;
+        code?: string;
+        response?: { status?: number; data?: unknown };
+        request?: unknown;
+    };
+    const status = requestError.response?.status;
+    const responseData = requestError.response?.data;
+    let detail = "";
+
+    if (typeof responseData === "string") {
+        detail = responseData.trim();
+    } else if (responseData && typeof responseData === "object") {
+        const body = responseData as Record<string, unknown>;
+        const message = body.message ?? body.detail ?? body.title;
+
+        if (typeof message === "string" && message.trim()) {
+            detail = message.trim();
+        } else if (Array.isArray(body.errors)) {
+            detail = body.errors
+                .map((item) => {
+                    if (typeof item === "string") return item;
+                    if (item && typeof item === "object") {
+                        const validationError = item as Record<string, unknown>;
+                        return validationError.defaultMessage ?? validationError.message;
+                    }
+                    return "";
+                })
+                .filter((item): item is string => typeof item === "string" && Boolean(item))
+                .join(" ");
+        } else if (body.errors && typeof body.errors === "object") {
+            detail = Object.values(body.errors as Record<string, unknown>)
+                .flatMap((value) => Array.isArray(value) ? value : [value])
+                .filter((value): value is string => typeof value === "string")
+                .join(" ");
+        }
+    }
+
+    if (detail) {
+        return status
+            ? `Đăng ký thất bại (HTTP ${status}): ${detail}`
+            : `Đăng ký thất bại: ${detail}`;
+    }
+    if (status === 400) {
+        return "Máy chủ từ chối thông tin đăng ký (HTTP 400). Hãy kiểm tra email, mật khẩu, họ tên, số điện thoại 10 chữ số bắt đầu bằng 0 và địa chỉ.";
+    }
+    if (status === 409) {
+        return "Email hoặc số điện thoại này đã được đăng ký (HTTP 409). Hãy dùng thông tin khác.";
+    }
+    if (status === 404) {
+        return "Không tìm thấy API đăng ký (HTTP 404). Kiểm tra đường dẫn API và backend đang chạy.";
+    }
+    if (status && status >= 500) {
+        return `Backend gặp lỗi khi tạo tài khoản (HTTP ${status}). Kiểm tra log backend và kết nối cơ sở dữ liệu.`;
+    }
+    if (status) {
+        return `Đăng ký thất bại (HTTP ${status}). ${requestError.message || "Backend không chấp nhận yêu cầu."}`;
+    }
+    if (requestError.code === "ERR_NETWORK" || requestError.request) {
+        return "Không kết nối được tới backend. Kiểm tra backend có đang chạy tại VITE_API_URL và cho phép kết nối từ frontend không.";
+    }
+
+    return `Không thể gửi yêu cầu đăng ký. ${requestError.message || "Vui lòng thử lại."}`;
+}
+
 function Register() {
     const navigate = useNavigate();
 
@@ -203,23 +269,14 @@ function Register() {
         } catch (error: any) {
             console.error(error);
 
-            const message =
-                error.response?.data?.message;
-
-            if (message) {
-                setError(message);
-            } else {
-                setError(
-                    "Đăng ký thất bại. Vui lòng kiểm tra lại thông tin."
-                );
-            }
+            setError(getRegistrationErrorMessage(error));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="auth-page">
+        <div className="auth-page register-page">
 
             <div className="auth-container">
 
@@ -474,7 +531,7 @@ function Register() {
 
                         {/* ERROR */}
                         {error && (
-                            <div className="auth-error">
+                            <div className="auth-error" role="alert" aria-live="polite">
                                 {error}
                             </div>
                         )}

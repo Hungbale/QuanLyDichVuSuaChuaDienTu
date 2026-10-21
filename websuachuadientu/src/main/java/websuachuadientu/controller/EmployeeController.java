@@ -5,8 +5,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import websuachuadientu.dto.EmployeeRequest;
+import websuachuadientu.dto.EmployeeProfileUpdateRequest;
 import websuachuadientu.entity.Employee;
 import websuachuadientu.service.EmployeeService;
 
@@ -19,6 +21,18 @@ import java.util.List;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+
+    @GetMapping("/me")
+    public ResponseEntity<Employee> getMyProfile(Authentication authentication) {
+        return ResponseEntity.ok(employeeService.getByEmail(authentication.getName()));
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<Employee> updateMyProfile(
+            Authentication authentication,
+            @Valid @RequestBody EmployeeProfileUpdateRequest request) {
+        return ResponseEntity.ok(employeeService.updateMyProfile(authentication.getName(), request));
+    }
 
     @GetMapping
     public ResponseEntity<List<Employee>> getAll(

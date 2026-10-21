@@ -1,5 +1,6 @@
 package websuachuadientu.config;
 
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,6 +44,8 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+
                         // Cho phép request OPTIONS của trình duyệt
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
@@ -69,8 +72,24 @@ public class SecurityConfig {
                         .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
                         .requestMatchers(HttpMethod.POST, "/api/appointments")
                         .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/appointments/me")
+                        .hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/appointments/assigned/me")
+                        .hasRole("EMPLOYEE")
+                        .requestMatchers(HttpMethod.PUT, "/api/appointments/*")
+                        .hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/appointments/*")
+                        .hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/employees/me")
+                        .hasAnyRole("ADMIN", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.PUT, "/api/employees/me")
+                        .hasRole("EMPLOYEE")
                         .requestMatchers(HttpMethod.GET, "/api/repair-tickets/history/me")
                         .hasAnyRole("ADMIN", "CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/repair-tickets/*/tracking")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.PATCH, "/api/repair-tickets/*/status")
+                        .hasAnyRole("ADMIN", "EMPLOYEE")
                         .requestMatchers(HttpMethod.GET, "/api/customers/me")
                         .hasAnyRole("ADMIN", "CUSTOMER")
                         .requestMatchers(HttpMethod.PUT, "/api/customers/me")
@@ -80,7 +99,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/quotes/*/decision")
                         .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
                         .requestMatchers(HttpMethod.POST, "/api/repair-tickets/*/payments")
-                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/repair-tickets/*/payments")
                         .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
 
@@ -89,6 +108,8 @@ public class SecurityConfig {
                         .hasAnyRole("ADMIN", "EMPLOYEE")
                         .requestMatchers(HttpMethod.GET, "/api/appointments")
                         .hasAnyRole("ADMIN", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.PATCH, "/api/appointments/*/assign")
+                        .hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/customers", "/api/customers/*")
                         .hasAnyRole("ADMIN", "EMPLOYEE")
                         .requestMatchers(HttpMethod.POST, "/api/customers")

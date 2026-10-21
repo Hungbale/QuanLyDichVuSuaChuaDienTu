@@ -37,6 +37,7 @@ import EmployeeQuotes from "../pages/employee/Quotes";
 import EmployeeAppointments from "../pages/employee/Appointments";
 import EmployeeRepairProcess from "../pages/employee/RepairProcess";
 import EmployeeCompleteRepair from "../pages/employee/CompleteRepair";
+import EmployeePayments from "../pages/employee/Payments";
 
 // ADMIN
 import AdminDashboard from "../pages/admin/Dashboard";
@@ -216,6 +217,11 @@ function AppRoutes() {
                         <Route
                             path="repair-process"
                             element={<EmployeeRepairProcess />}
+                        />
+
+                        <Route
+                            path="payments"
+                            element={<EmployeePayments />}
                         />
 
                         {/* 20 */}

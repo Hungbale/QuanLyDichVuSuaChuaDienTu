@@ -13,6 +13,7 @@ import {
     changeServiceStatusApi,
     createServiceApi,
     deleteServiceApi,
+    getServiceByIdApi,
     getServicesApi,
     updateServiceApi,
 } from "../../api/serviceApi";
@@ -24,6 +25,7 @@ import type {
 } from "../../types/service";
 
 function AdminServices() {
+    const [activeTab, setActiveTab] = useState<"services" | "categories">("services");
     // =========================
     // SERVICE STATE
     // =========================
@@ -46,6 +48,13 @@ function AdminServices() {
     // =========================
 
     const [showServiceModal, setShowServiceModal] =
+        useState(false);
+
+    const [showServiceDetails, setShowServiceDetails] =
+        useState(false);
+    const [serviceDetails, setServiceDetails] =
+        useState<ServiceItem | null>(null);
+    const [loadingServiceDetails, setLoadingServiceDetails] =
         useState(false);
 
     const [editingService, setEditingService] =
@@ -166,6 +175,27 @@ function AdminServices() {
         setSuccess("");
 
         setShowServiceModal(true);
+    };
+
+    const openServiceDetails = async (service: ServiceItem) => {
+        setShowServiceDetails(true);
+        setServiceDetails(null);
+        setLoadingServiceDetails(true);
+        setError("");
+
+        try {
+            const details = await getServiceByIdApi(service.id);
+            setServiceDetails(details);
+        } catch (error: any) {
+            console.error(error);
+            setError(
+                error.response?.data?.message ||
+                    "Không thể tải thông tin dịch vụ."
+            );
+            setShowServiceDetails(false);
+        } finally {
+            setLoadingServiceDetails(false);
+        }
     };
 
     const closeServiceModal = () => {
@@ -495,7 +525,7 @@ function AdminServices() {
     };
 
     return (
-        <div className="management-page">
+        <div className="management-page admin-services-page">
             {/* ========================= */}
             {/* HEADER */}
             {/* ========================= */}
@@ -510,23 +540,15 @@ function AdminServices() {
                 </div>
 
                 <div className="action-buttons">
-                    <button
-                        className="secondary-button"
-                        onClick={
-                            openCreateCategoryModal
-                        }
-                    >
-                        + Thêm danh mục
-                    </button>
-
-                    <button
-                        className="primary-button"
-                        onClick={
-                            openCreateServiceModal
-                        }
-                    >
-                        + Thêm dịch vụ
-                    </button>
+                    {activeTab === "categories" ? (
+                        <button className="primary-button" onClick={openCreateCategoryModal}>
+                            + Thêm danh mục
+                        </button>
+                    ) : (
+                        <button className="primary-button" onClick={openCreateServiceModal}>
+                            + Thêm dịch vụ
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -546,11 +568,35 @@ function AdminServices() {
                 </div>
             )}
 
+            <div className="service-management-tabs" role="tablist" aria-label="Nội dung quản lý dịch vụ">
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "services"}
+                    className={activeTab === "services" ? "service-management-tab active" : "service-management-tab"}
+                    onClick={() => setActiveTab("services")}
+                >
+                    Dịch vụ <span>{services.length}</span>
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "categories"}
+                    className={activeTab === "categories" ? "service-management-tab active" : "service-management-tab"}
+                    onClick={() => setActiveTab("categories")}
+                >
+                    Danh mục <span>{categories.length}</span>
+                </button>
+            </div>
+
             {/* ========================= */}
             {/* SERVICE FILTER */}
             {/* ========================= */}
 
-            <div className="filter-panel">
+            {activeTab === "services" && (
+                <>
+
+            <div className="filter-panel service-admin-filters">
                 <div className="filter-field">
                     <label>
                         Tìm kiếm dịch vụ
@@ -644,6 +690,15 @@ function AdminServices() {
             {/* SERVICE TABLE */}
             {/* ========================= */}
 
+            <section className="service-admin-list-section" aria-labelledby="service-list-title">
+                <div className="service-admin-section-heading">
+                    <div>
+                        <h2 id="service-list-title">Danh sách dịch vụ</h2>
+                        <p>Tra cứu, cập nhật trạng thái và quản lý dịch vụ sửa chữa.</p>
+                    </div>
+                    {!loading && <span>{services.length} dịch vụ</span>}
+                </div>
+
             <div className="table-container">
                 {loading ? (
                     <div className="table-state">
@@ -728,6 +783,15 @@ function AdminServices() {
                                                 <button
                                                     className="secondary-button"
                                                     onClick={() =>
+                                                        openServiceDetails(service)
+                                                    }
+                                                >
+                                                    Chi tiết
+                                                </button>
+
+                                                <button
+                                                    className="secondary-button"
+                                                    onClick={() =>
                                                         openEditServiceModal(
                                                             service
                                                         )
@@ -770,17 +834,100 @@ function AdminServices() {
                 )}
             </div>
 
+            </section>
+
+                </>
+            )}
+
+            {showServiceDetails && (
+                <div
+                    className="modal-overlay"
+                    onClick={() => setShowServiceDetails(false)}
+                >
+                    <section
+                        className="modal customer-modal service-details-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="service-details-title"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="modal-header">
+                            <h2 id="service-details-title">Thông tin dịch vụ</h2>
+                            <button
+                                className="modal-close"
+                                type="button"
+                                aria-label="Đóng"
+                                onClick={() => setShowServiceDetails(false)}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {loadingServiceDetails ? (
+                            <div className="table-state">
+                                Đang tải thông tin dịch vụ...
+                            </div>
+                        ) : serviceDetails ? (
+                            <dl className="service-details-list">
+                                <div>
+                                    <dt>Mã dịch vụ</dt>
+                                    <dd>{serviceDetails.serviceCode}</dd>
+                                </div>
+                                <div>
+                                    <dt>Tên dịch vụ</dt>
+                                    <dd>{serviceDetails.name}</dd>
+                                </div>
+                                <div>
+                                    <dt>Danh mục</dt>
+                                    <dd>{serviceDetails.category.name}</dd>
+                                </div>
+                                <div>
+                                    <dt>Giá dịch vụ</dt>
+                                    <dd>{serviceDetails.price.toLocaleString("vi-VN")} đ</dd>
+                                </div>
+                                <div>
+                                    <dt>Trạng thái</dt>
+                                    <dd>
+                                        {serviceDetails.status === "ACTIVE"
+                                            ? "Đang hoạt động"
+                                            : "Ngừng hoạt động"}
+                                    </dd>
+                                </div>
+                                <div className="service-details-description">
+                                    <dt>Mô tả</dt>
+                                    <dd>{serviceDetails.description || "Chưa có mô tả."}</dd>
+                                </div>
+                            </dl>
+                        ) : null}
+
+                        <div className="modal-actions">
+                            <button
+                                type="button"
+                                className="primary-button"
+                                onClick={() => setShowServiceDetails(false)}
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            )}
+
             {/* ========================= */}
             {/* CATEGORY SECTION */}
             {/* ========================= */}
 
+            {activeTab === "categories" && (
+                <>
+
+            <section className="service-category-section" aria-labelledby="service-category-title">
             <div
                 className="page-header"
                 style={{
                     marginTop: "40px",
                 }}
             >
-                <h2>
+                <h2 id="service-category-title">
                     Quản lý danh mục
                 </h2>
 
@@ -887,6 +1034,11 @@ function AdminServices() {
                     </table>
                 )}
             </div>
+
+            </section>
+
+                </>
+            )}
 
             {/* ========================= */}
             {/* SERVICE MODAL */}

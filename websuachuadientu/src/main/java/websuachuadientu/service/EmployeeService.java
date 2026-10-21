@@ -5,12 +5,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import websuachuadientu.dto.EmployeeRequest;
+import websuachuadientu.dto.EmployeeProfileUpdateRequest;
 import websuachuadientu.entity.Employee;
 import websuachuadientu.entity.User;
 import websuachuadientu.repository.EmployeeRepository;
 import websuachuadientu.repository.UserRepository;
 
 import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -40,15 +43,46 @@ public class EmployeeService {
                         new RuntimeException("Không tìm thấy nhân viên"));
     }
 
+    public Employee getByEmail(String email) {
+        return employeeRepository.findByUser_Email(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Không tìm thấy hồ sơ nhân viên"));
+    }
+
+    @Transactional
+    public Employee updateMyProfile(String currentEmail, EmployeeProfileUpdateRequest request) {
+        Employee employee = getByEmail(currentEmail);
+        User user = employee.getUser();
+
+        if (!user.getEmail().equalsIgnoreCase(request.getEmail())
+                && userRepository.existsByEmail(request.getEmail())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã tồn tại");
+        }
+
+        if (!employee.getPhone().equals(request.getPhone())
+                && employeeRepository.existsByPhone(request.getPhone())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Số điện thoại đã tồn tại");
+        }
+
+        user.setEmail(request.getEmail());
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+        employee.setFullName(request.getFullName());
+        employee.setPhone(request.getPhone());
+
+        return employeeRepository.save(employee);
+    }
+
     @Transactional
     public Employee create(EmployeeRequest request) {
 
         if (employeeRepository.existsByEmployeeCode(request.getEmployeeCode())) {
-            throw new RuntimeException("Mã nhân viên đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Mã nhân viên đã tồn tại");
         }
 
         if (employeeRepository.existsByPhone(request.getPhone())) {
-            throw new RuntimeException("Số điện thoại đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Số điện thoại đã tồn tại");
         }
 
         if (request.getPassword() == null || request.getPassword().isBlank()) {
@@ -56,7 +90,7 @@ public class EmployeeService {
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã tồn tại");
         }
 
         User user = new User();
@@ -83,12 +117,12 @@ public class EmployeeService {
 
         if (!user.getEmail().equalsIgnoreCase(request.getEmail())
                 && userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã tồn tại");
         }
 
         if (!employee.getPhone().equals(request.getPhone())
                 && employeeRepository.existsByPhone(request.getPhone())) {
-            throw new RuntimeException("Số điện thoại đã tồn tại");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Số điện thoại đã tồn tại");
         }
 
         user.setEmail(request.getEmail());
