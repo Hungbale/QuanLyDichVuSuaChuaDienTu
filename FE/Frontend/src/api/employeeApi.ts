@@ -8,6 +8,18 @@ export interface EmployeeSearchParams {
     keyword?: string;
 }
 
+export type EmployeeProfileUpdateRequest = Pick<EmployeeRequest, "fullName" | "email" | "phone"> & { password?: string };
+
+export const getMyEmployeeProfileApi = async (): Promise<Employee> => {
+    const response = await axiosClient.get<Employee>("/api/employees/me");
+    return response.data;
+};
+
+export const updateMyEmployeeProfileApi = async (data: EmployeeProfileUpdateRequest): Promise<Employee> => {
+    const response = await axiosClient.put<Employee>("/api/employees/me", data);
+    return response.data;
+};
+
 export const getEmployeesApi = async (
     params?: EmployeeSearchParams
 ): Promise<Employee[]> => {

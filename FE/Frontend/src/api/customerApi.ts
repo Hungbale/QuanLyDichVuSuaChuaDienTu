@@ -9,6 +9,18 @@ export interface CustomerSearchParams {
     status?: string;
 }
 
+export type CustomerProfileUpdateRequest = Pick<CustomerRequest, "customerCode" | "fullName" | "email" | "phone" | "address"> & { password?: string };
+
+export const getMyCustomerProfileApi = async (): Promise<Customer> => {
+    const response = await axiosClient.get<Customer>("/api/customers/me");
+    return response.data;
+};
+
+export const updateMyCustomerProfileApi = async (data: CustomerProfileUpdateRequest): Promise<Customer> => {
+    const response = await axiosClient.put<Customer>("/api/customers/me", data);
+    return response.data;
+};
+
 export const getCustomersApi = async (
     params?: CustomerSearchParams
 ): Promise<Customer[]> => {

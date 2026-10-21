@@ -98,7 +98,7 @@ function AdminEmployees() {
             employeeCode: employee.employeeCode,
             fullName: employee.fullName,
             phone: employee.phone,
-            email: employee.email,
+            email: employee.email ?? employee.user?.email ?? "",
             password: "",
         });
 
@@ -423,7 +423,7 @@ function AdminEmployees() {
                                     </td>
 
                                     <td>
-                                        {employee.email}
+                                        {employee.email ?? employee.user?.email ?? "—"}
                                     </td>
 
                                     <td>
