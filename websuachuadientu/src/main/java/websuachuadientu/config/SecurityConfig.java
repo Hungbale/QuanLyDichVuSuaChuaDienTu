@@ -139,7 +139,8 @@ public class SecurityConfig {
                 List.of(
                         "http://localhost:5173",
                         "http://localhost:8080",
-                        "https://quanlydichvusuachuadientu.onrender.com"
+                        "https://quanlydichvusuachuadientu.onrender.com",
+                        "https://quanlydichvusuachuadientu-be.onrender.com"
                 )
         );
 
