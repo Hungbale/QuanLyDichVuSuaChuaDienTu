@@ -13,6 +13,8 @@ import websuachuadientu.entity.RepairQuoteItem;
 import websuachuadientu.entity.RepairTicket;
 import websuachuadientu.repository.RepairQuoteRepository;
 import websuachuadientu.repository.RepairTicketRepository;
+import websuachuadientu.enums.RepairQuoteDecision;
+import websuachuadientu.enums.RepairTicketStatus;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -31,6 +33,7 @@ public class RepairQuoteService {
         if (quoteRepository.existsByRepairTicket_Id(ticketId)) {
             throw new IllegalStateException("Phiếu sửa chữa đã có báo giá");
         }
+        transitionTicket(ticket, RepairTicketStatus.WAITING_FOR_QUOTE_APPROVAL);
 
         RepairQuote quote = new RepairQuote();
         quote.setRepairTicket(ticket);
@@ -38,7 +41,6 @@ public class RepairQuoteService {
         replaceItemsAndTotal(quote, request.items());
         quote = quoteRepository.save(quote);
         quote.setQuoteCode("BG%06d".formatted(quote.getId()));
-        ticket.setStatus("Chờ xác nhận báo giá");
         ticketRepository.save(ticket);
         return toResponse(quoteRepository.save(quote));
     }
@@ -60,26 +62,28 @@ public class RepairQuoteService {
     }
 
     @Transactional
-    public RepairQuoteResponse decide(Long quoteId, String decision, String email, boolean admin) {
+    public RepairQuoteResponse decide(Long quoteId, RepairQuoteDecision decision, String email, boolean admin) {
         RepairQuote quote = findQuote(quoteId);
         ensureAssignedEmployee(quote.getRepairTicket(), email, admin);
         if (!"SENT".equals(quote.getStatus())) {
             throw new IllegalStateException("Báo giá không còn ở trạng thái chờ xác nhận");
         }
-        quote.setStatus(decision);
-        quote.getRepairTicket().setStatus("ACCEPTED".equals(decision) ? "Đang sửa" : "Khách từ chối");
+        quote.setStatus(decision.name());
+        transitionTicket(quote.getRepairTicket(), decision == RepairQuoteDecision.ACCEPTED
+                ? RepairTicketStatus.REPAIRING : RepairTicketStatus.CUSTOMER_DECLINED);
         return toResponse(quoteRepository.save(quote));
     }
 
     @Transactional
-    public RepairQuoteResponse decideForCustomer(Long quoteId, String decision, String email) {
+    public RepairQuoteResponse decideForCustomer(Long quoteId, RepairQuoteDecision decision, String email) {
         RepairQuote quote = findQuote(quoteId);
         ensureCustomerOwns(quote.getRepairTicket(), email);
         if (!"SENT".equals(quote.getStatus())) {
             throw new IllegalStateException("Báo giá không còn ở trạng thái chờ xác nhận");
         }
-        quote.setStatus(decision);
-        quote.getRepairTicket().setStatus("ACCEPTED".equals(decision) ? "Đang sửa" : "Khách từ chối");
+        quote.setStatus(decision.name());
+        transitionTicket(quote.getRepairTicket(), decision == RepairQuoteDecision.ACCEPTED
+                ? RepairTicketStatus.REPAIRING : RepairTicketStatus.CUSTOMER_DECLINED);
         return toResponse(quoteRepository.save(quote));
     }
 
@@ -88,6 +92,21 @@ public class RepairQuoteService {
                 || !ticket.getCustomer().getUser().getEmail().equalsIgnoreCase(email)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bạn không có quyền truy cập dữ liệu này");
         }
+    }
+
+    private void transitionTicket(RepairTicket ticket, RepairTicketStatus nextStatus) {
+        RepairTicketStatus currentStatus;
+        try {
+            currentStatus = RepairTicketStatus.fromValue(ticket.getStatus());
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Current ticket status must be reviewed before it can be changed", exception);
+        }
+        if (currentStatus == null || !currentStatus.canTransitionTo(nextStatus)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Repair ticket status transition is not allowed");
+        }
+        ticket.setStatus(nextStatus.storedValue());
     }
 
     private void ensureAssignedEmployee(RepairTicket ticket, String email, boolean admin) {

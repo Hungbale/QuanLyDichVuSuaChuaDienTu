@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
     List<Appointment> findAllByOrderByAppointmentDateAscAppointmentTimeAsc();
 
+    List<Appointment> findByStatusOrderByAppointmentDateAscAppointmentTimeAsc(String status);
+
     List<Appointment> findByContactPhoneOrderByAppointmentDateAscAppointmentTimeAsc(String contactPhone);
 
     List<Appointment> findByCustomer_User_EmailOrderByAppointmentDateAscAppointmentTimeAsc(String email);

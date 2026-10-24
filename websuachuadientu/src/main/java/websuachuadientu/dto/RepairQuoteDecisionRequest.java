@@ -1,8 +1,8 @@
 package websuachuadientu.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotNull;
+import websuachuadientu.enums.RepairQuoteDecision;
 
 public record RepairQuoteDecisionRequest(
-        @NotBlank @Pattern(regexp = "ACCEPTED|REJECTED") String decision
+        @NotNull RepairQuoteDecision decision
 ) {}

@@ -31,6 +31,11 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getAll());
     }
 
+    @GetMapping("/pending")
+    public ResponseEntity<List<AssignedAppointmentResponse>> getPending() {
+        return ResponseEntity.ok(appointmentService.getPending());
+    }
+
     @GetMapping("/me")
     public ResponseEntity<List<Appointment>> getMine(Authentication authentication) {
         return ResponseEntity.ok(appointmentService.getByCustomerEmail(authentication.getName()));
@@ -68,7 +73,12 @@ public class AppointmentController {
     }
 
     @PatchMapping("/{id}/assign")
-    public ResponseEntity<Appointment> assign(@PathVariable Long id) {
-        return ResponseEntity.ok(appointmentService.assignLeastBusyTechnician(id));
+    public ResponseEntity<Appointment> assign(@PathVariable Long id, Authentication authentication) {
+        boolean admin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        Appointment appointment = admin
+                ? appointmentService.assignLeastBusyTechnician(id)
+                : appointmentService.assignToEmployee(id, authentication.getName());
+        return ResponseEntity.ok(appointment);
     }
 }
