@@ -13,6 +13,7 @@ import websuachuadientu.entity.RepairQuoteItem;
 import websuachuadientu.entity.RepairTicket;
 import websuachuadientu.repository.RepairQuoteRepository;
 import websuachuadientu.repository.RepairTicketRepository;
+import websuachuadientu.repository.RepairDiagnosisRepository;
 import websuachuadientu.enums.RepairQuoteDecision;
 import websuachuadientu.enums.RepairTicketStatus;
 
@@ -24,12 +25,17 @@ import java.util.List;
 public class RepairQuoteService {
     private final RepairQuoteRepository quoteRepository;
     private final RepairTicketRepository ticketRepository;
+    private final RepairDiagnosisRepository diagnosisRepository;
 
     @Transactional
     public RepairQuoteResponse create(Long ticketId, RepairQuoteRequest request, String email, boolean admin) {
         RepairTicket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu sửa chữa"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu sửa chữa"));
         ensureAssignedEmployee(ticket, email, admin);
+        if (diagnosisRepository.findByRepairTicket_Id(ticketId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Record the repair diagnosis before creating a quote");
+        }
         if (quoteRepository.existsByRepairTicket_Id(ticketId)) {
             throw new IllegalStateException("Phiếu sửa chữa đã có báo giá");
         }
@@ -48,7 +54,7 @@ public class RepairQuoteService {
     @Transactional(readOnly = true)
     public RepairQuoteResponse getByTicketId(Long ticketId, String email, boolean admin) {
         RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
-                .orElseThrow(() -> new IllegalArgumentException("Phiếu sửa chữa chưa có báo giá"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Phiếu sửa chữa chưa có báo giá"));
         ensureAssignedEmployee(quote.getRepairTicket(), email, admin);
         return toResponse(quote);
     }
@@ -56,7 +62,7 @@ public class RepairQuoteService {
     @Transactional(readOnly = true)
     public RepairQuoteResponse getByTicketIdForCustomer(Long ticketId, String email) {
         RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
-                .orElseThrow(() -> new IllegalArgumentException("Phiếu sửa chữa chưa có báo giá"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Phiếu sửa chữa chưa có báo giá"));
         ensureCustomerOwns(quote.getRepairTicket(), email);
         return toResponse(quote);
     }
@@ -119,18 +125,25 @@ public class RepairQuoteService {
 
     private RepairQuote findQuote(Long id) {
         return quoteRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy báo giá"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy báo giá"));
     }
 
     private void replaceItemsAndTotal(RepairQuote quote, List<RepairQuoteItemRequest> requests) {
         BigDecimal total = BigDecimal.ZERO;
+        BigDecimal maximumAmount = new BigDecimal("999999999999.99");
         for (RepairQuoteItemRequest request : requests) {
+            BigDecimal lineTotal = request.unitPrice().multiply(BigDecimal.valueOf(request.quantity()));
+            if (lineTotal.compareTo(maximumAmount) > 0
+                    || total.add(lineTotal).compareTo(maximumAmount) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Quote item and total amounts must fit within the supported 14-digit currency range");
+            }
             RepairQuoteItem item = new RepairQuoteItem();
             item.setQuote(quote);
             item.setName(request.name().trim());
             item.setQuantity(request.quantity());
             item.setUnitPrice(request.unitPrice());
-            item.setLineTotal(request.unitPrice().multiply(BigDecimal.valueOf(request.quantity())));
+            item.setLineTotal(lineTotal);
             quote.getItems().add(item);
             total = total.add(item.getLineTotal());
         }

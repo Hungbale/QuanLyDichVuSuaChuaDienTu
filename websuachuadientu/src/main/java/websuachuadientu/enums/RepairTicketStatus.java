@@ -32,13 +32,9 @@ public enum RepairTicketStatus {
 
     public boolean canTransitionTo(RepairTicketStatus next) {
         return switch (this) {
-            case SCHEDULED -> next == DIAGNOSING
-                    || next == RECEIVED
-                    || next == WAITING_FOR_QUOTE_APPROVAL
-                    || next == CANCELLED;
+            case SCHEDULED -> next == RECEIVED || next == CANCELLED;
             case RECEIVED -> next == DIAGNOSING || next == CANCELLED;
             case DIAGNOSING -> next == WAITING_FOR_QUOTE_APPROVAL
-                    || next == REPAIRING
                     || next == WAITING_FOR_PARTS
                     || next == CANNOT_BE_REPAIRED
                     || next == CANCELLED;

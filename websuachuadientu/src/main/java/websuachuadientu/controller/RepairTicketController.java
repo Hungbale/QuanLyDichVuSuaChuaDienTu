@@ -19,6 +19,9 @@ import websuachuadientu.dto.RepairTrackingResponse;
 import websuachuadientu.dto.RepairIntakeRequest;
 import websuachuadientu.dto.RepairIntakeResponse;
 import websuachuadientu.service.RepairIntakeService;
+import websuachuadientu.dto.RepairDiagnosisRequest;
+import websuachuadientu.dto.RepairDiagnosisResponse;
+import websuachuadientu.service.RepairDiagnosisService;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -32,6 +35,7 @@ public class RepairTicketController {
     private final RepairTicketService ticketService;
     private final RepairTrackingService trackingService;
     private final RepairIntakeService intakeService;
+    private final RepairDiagnosisService diagnosisService;
 
     @GetMapping
     public ResponseEntity<List<RepairTicketResponse>> search(
@@ -91,6 +95,22 @@ public class RepairTicketController {
                 id, authentication.getName(), isAdmin(authentication)));
     }
 
+    @PutMapping("/{id}/diagnosis")
+    public ResponseEntity<RepairDiagnosisResponse> saveDiagnosis(
+            @PathVariable Long id,
+            @Valid @RequestBody RepairDiagnosisRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(diagnosisService.save(
+                id, request, authentication.getName(), isAdmin(authentication)));
+    }
+
+    @GetMapping("/{id}/diagnosis")
+    public ResponseEntity<RepairDiagnosisResponse> getDiagnosis(
+            @PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(diagnosisService.get(
+                id, authentication.getName(), isAdmin(authentication)));
+    }
+
     @PatchMapping(value = "/{id}/status", consumes = "multipart/form-data")
     public ResponseEntity<RepairStatusUpdateResponse> updateStatus(
             @PathVariable Long id,
@@ -117,9 +137,4 @@ public class RepairTicketController {
                 .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(IllegalArgumentException exception) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("message", exception.getMessage()));
-    }
 }

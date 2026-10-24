@@ -15,6 +15,7 @@ import websuachuadientu.entity.RepairStatusUpdate;
 import websuachuadientu.repository.EmployeeRepository;
 import websuachuadientu.repository.RepairStatusUpdateRepository;
 import websuachuadientu.repository.RepairTicketRepository;
+import websuachuadientu.repository.AppointmentRepository;
 import websuachuadientu.enums.RepairTicketStatus;
 
 import java.io.IOException;
@@ -29,6 +30,7 @@ public class RepairTrackingService {
     private static final long MAX_PHOTO_BYTES = 5L * 1024 * 1024;
 
     private final RepairTicketRepository ticketRepository;
+    private final AppointmentRepository appointmentRepository;
     private final RepairStatusUpdateRepository updateRepository;
     private final EmployeeRepository employeeRepository;
 
@@ -38,6 +40,11 @@ public class RepairTrackingService {
             String actorEmail, boolean admin) {
         var ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repair ticket not found"));
+        if (ticket.getAppointment() != null
+                && "CANCELLATION_REQUESTED".equals(ticket.getAppointment().getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Resolve the appointment cancellation request before changing the ticket status");
+        }
         Employee employee = employeeRepository.findByUser_Email(actorEmail)
                 .orElse(null);
         if (!admin && (employee == null || ticket.getTechnician() == null
@@ -70,6 +77,15 @@ public class RepairTrackingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Current ticket status must be reviewed before it can be changed", exception);
         }
+        boolean statusHasDedicatedWorkflow = requestedStatus == RepairTicketStatus.DIAGNOSING
+                || requestedStatus == RepairTicketStatus.WAITING_FOR_QUOTE_APPROVAL
+                || requestedStatus == RepairTicketStatus.CUSTOMER_DECLINED
+                || (requestedStatus == RepairTicketStatus.REPAIRING
+                && currentStatus != RepairTicketStatus.WAITING_FOR_PARTS);
+        if (statusHasDedicatedWorkflow) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Use the intake, diagnosis, or quote API for this status transition");
+        }
         if (currentStatus == null || !currentStatus.canTransitionTo(requestedStatus)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Repair ticket status transition is not allowed");
@@ -95,6 +111,10 @@ public class RepairTrackingService {
             ticket.setCompletedDate(LocalDate.now());
         }
         ticketRepository.save(ticket);
+        if (requestedStatus == RepairTicketStatus.CANCELLED && ticket.getAppointment() != null) {
+            ticket.getAppointment().setStatus("CANCELLED");
+            appointmentRepository.save(ticket.getAppointment());
+        }
         return toResponse(updateRepository.save(update));
     }
 

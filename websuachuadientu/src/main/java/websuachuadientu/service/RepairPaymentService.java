@@ -25,7 +25,7 @@ public class RepairPaymentService {
     @Transactional
     public RepairPaymentResponse initiate(Long ticketId, RepairPaymentRequest request) {
         RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
-                .orElseThrow(() -> new IllegalArgumentException("Phiếu sửa chữa chưa có báo giá"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Phiếu sửa chữa chưa có báo giá"));
         if (!"ACCEPTED".equals(quote.getStatus())) {
             throw new IllegalStateException("Cần chấp nhận báo giá trước khi thanh toán");
         }
@@ -46,7 +46,7 @@ public class RepairPaymentService {
     @Transactional
     public RepairPaymentResponse initiateForCustomer(Long ticketId, RepairPaymentRequest request, String email) {
         RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
-                .orElseThrow(() -> new IllegalArgumentException("Phiếu sửa chữa chưa có báo giá"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Phiếu sửa chữa chưa có báo giá"));
         ensureCustomerOwns(quote, email);
         return initiate(ticketId, request);
     }
@@ -54,7 +54,7 @@ public class RepairPaymentService {
     @Transactional(readOnly = true)
     public List<RepairPaymentResponse> history(Long ticketId) {
         if (!quoteRepository.existsByRepairTicket_Id(ticketId)) {
-            throw new IllegalArgumentException("Phiếu sửa chữa chưa có báo giá");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Phiếu sửa chữa chưa có báo giá");
         }
         return paymentRepository.findByQuote_RepairTicket_IdOrderByCreatedAtDesc(ticketId)
                 .stream().map(this::toResponse).toList();
@@ -63,7 +63,7 @@ public class RepairPaymentService {
     @Transactional(readOnly = true)
     public List<RepairPaymentResponse> historyForCustomer(Long ticketId, String email) {
         RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
-                .orElseThrow(() -> new IllegalArgumentException("Phiếu sửa chữa chưa có báo giá"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Phiếu sửa chữa chưa có báo giá"));
         ensureCustomerOwns(quote, email);
         return history(ticketId);
     }
@@ -79,7 +79,7 @@ public class RepairPaymentService {
     @Transactional
     public RepairPaymentResponse confirmReceived(Long paymentId, String email, boolean admin) {
         RepairPayment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy giao dịch thanh toán"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy giao dịch thanh toán"));
         ensureAssignedEmployee(payment.getQuote().getRepairTicket(), email, admin);
         if (!"PENDING".equals(payment.getStatus())) {
             throw new IllegalStateException("Giao dịch này không ở trạng thái chờ thanh toán");
@@ -100,7 +100,7 @@ public class RepairPaymentService {
     @Transactional(readOnly = true)
     public List<RepairPaymentResponse> historyForEmployee(Long ticketId, String email) {
         RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
-                .orElseThrow(() -> new IllegalArgumentException("Repair quote not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy báo giá"));
         ensureAssignedEmployee(quote.getRepairTicket(), email, false);
         return history(ticketId);
     }
