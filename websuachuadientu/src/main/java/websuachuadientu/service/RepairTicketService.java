@@ -37,7 +37,8 @@ public class RepairTicketService {
     public RepairTicketResponse createForAppointment(websuachuadientu.entity.Appointment appointment) {
         if (ticketRepository.existsByAppointment_Id(appointment.getId())) {
             RepairTicket existing = ticketRepository.findByAppointment_Id(appointment.getId())
-                    .orElseThrow(() -> new IllegalStateException("Repair ticket exists but could not be loaded"));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Appointment already has a repair ticket; refresh and try again"));
             return toResponse(existing);
         }
         if (appointment.getCustomer() == null || appointment.getTechnician() == null) {
@@ -126,6 +127,38 @@ public class RepairTicketService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Change ticket status through PATCH /api/repair-tickets/{id}/status with evidence photos");
         }
+        if (ticket.getAppointment() != null) {
+            var linkedAppointment = ticket.getAppointment();
+            if (!ticket.getDevice().equals(request.getDevice().trim())
+                    || !ticket.getReceivedDate().equals(request.getReceivedDate())
+                    || !ticket.getCustomer().getId().equals(request.getCustomerId())
+                    || (request.getServiceId() != null && !java.util.Objects.equals(
+                    ticket.getService() == null ? null : ticket.getService().getId(), request.getServiceId()))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Device, customer, date, and service on an appointment-linked ticket cannot be edited independently");
+            }
+            if (admin && (request.getTechnicianId() == null
+                    || linkedAppointment.getTechnician() == null
+                    || !linkedAppointment.getTechnician().getId().equals(request.getTechnicianId()))) {
+                if (request.getTechnicianId() == null) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "An appointment-linked ticket must keep its assigned technician");
+                }
+                linkedAppointment.setTechnician(employeeRepository.findById(request.getTechnicianId())
+                        .filter(employee -> "ACTIVE".equals(employee.getStatus()))
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Technician does not exist or is inactive")));
+                appointmentRepository.save(linkedAppointment);
+            }
+        }
+        if (!admin && (!ticket.getDevice().equals(request.getDevice().trim())
+                || !ticket.getReceivedDate().equals(request.getReceivedDate())
+                || !ticket.getCustomer().getId().equals(request.getCustomerId())
+                || (request.getServiceId() != null && !java.util.Objects.equals(
+                ticket.getService() == null ? null : ticket.getService().getId(), request.getServiceId())))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only admin can change the customer, device, service, or received date");
+        }
         List<String> changedFields = new java.util.ArrayList<>();
         if (!ticket.getDevice().equals(request.getDevice().trim())) {
             changedFields.add("device: " + ticket.getDevice() + " -> " + request.getDevice().trim());
@@ -174,7 +207,9 @@ public class RepairTicketService {
         return activityRepository.findByRepairTicket_IdOrderByCreatedAtAscIdAsc(id).stream()
                 .map(activity -> new RepairTicketActivityResponse(
                         activity.getId(), activity.getAction(), activity.getDetails(), activity.getNote(),
-                        activity.getEmployee() == null ? "Admin" : activity.getEmployee().getFullName(),
+                        activity.getEmployee() == null
+                                ? (activity.getAction().startsWith("CUSTOMER_") ? "Khách hàng" : "Admin")
+                                : activity.getEmployee().getFullName(),
                         activity.getCreatedAt()))
                 .toList();
     }
@@ -182,7 +217,8 @@ public class RepairTicketService {
     @Transactional(readOnly = true)
     public List<RepairHistoryResponse> getMyHistory(String email) {
         var customer = customerRepository.findByUser_Email(email)
-                .orElseThrow(() -> new IllegalArgumentException("Tài khoản không thuộc khách hàng nào"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Tài khoản không thuộc hồ sơ khách hàng nào"));
         return ticketRepository.findByCustomer_IdOrderByReceivedDateDescIdDesc(customer.getId())
                 .stream()
                 .map(ticket -> new RepairHistoryResponse(
@@ -207,11 +243,13 @@ public class RepairTicketService {
                     "customerId is required when no appointmentId is provided");
         }
         Customer customer = customerRepository.findById(request.getCustomerId())
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy khách hàng"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khách hàng"));
         Employee technician = null;
         if (request.getTechnicianId() != null) {
             technician = employeeRepository.findById(request.getTechnicianId())
-                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy kỹ thuật viên"));
+                    .filter(employee -> "ACTIVE".equals(employee.getStatus()))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Technician does not exist or is inactive"));
         }
         ticket.setCustomer(customer);
         ticket.setDevice(request.getDevice().trim());
@@ -220,13 +258,13 @@ public class RepairTicketService {
         ticket.setTechnician(technician);
         if (request.getServiceId() != null) {
             ticket.setService(serviceItemRepository.findById(request.getServiceId())
-                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dịch vụ")));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy dịch vụ")));
         }
     }
 
     private RepairTicket findTicket(Long id) {
         return ticketRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu sửa chữa"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu sửa chữa"));
     }
 
     private boolean isAssignedTo(RepairTicket ticket, String email) {

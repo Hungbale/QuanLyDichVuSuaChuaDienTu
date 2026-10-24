@@ -9,10 +9,16 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import websuachuadientu.dto.AppointmentRequest;
 import websuachuadientu.dto.AssignedAppointmentResponse;
+import websuachuadientu.dto.AppointmentAvailabilityResponse;
+import websuachuadientu.dto.AppointmentCancellationReasonRequest;
+import websuachuadientu.dto.AppointmentCancellationRequest;
+import websuachuadientu.dto.AppointmentCancellationResponse;
 import websuachuadientu.entity.Appointment;
 import websuachuadientu.service.AppointmentService;
 
 import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 @RestController
 @RequestMapping("/api/appointments")
@@ -23,12 +29,18 @@ public class AppointmentController {
     private final AppointmentService appointmentService;
 
     @GetMapping
-    public ResponseEntity<List<Appointment>> getAll(
+    public ResponseEntity<List<AssignedAppointmentResponse>> getAll(
+            @RequestParam(required = false) LocalDate date,
+            @RequestParam(required = false) String status,
             @RequestParam(required = false) String contactPhone) {
-        if (contactPhone != null && !contactPhone.isBlank()) {
-            return ResponseEntity.ok(appointmentService.getByContactPhone(contactPhone));
-        }
-        return ResponseEntity.ok(appointmentService.getAll());
+        return ResponseEntity.ok(appointmentService.getAll(date, status, contactPhone));
+    }
+
+    @GetMapping("/availability")
+    public ResponseEntity<AppointmentAvailabilityResponse> checkAvailability(
+            @RequestParam LocalDate date,
+            @RequestParam LocalTime time) {
+        return ResponseEntity.ok(appointmentService.checkAvailability(date, time));
     }
 
     @GetMapping("/pending")
@@ -70,6 +82,34 @@ public class AppointmentController {
             Authentication authentication) {
         appointmentService.cancelByCustomer(id, authentication.getName());
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/cancellation-request")
+    public ResponseEntity<AppointmentCancellationResponse> requestCancellation(
+            @PathVariable Long id,
+            @Valid @RequestBody AppointmentCancellationReasonRequest request,
+            Authentication authentication) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(appointmentService.requestCancellationByCustomer(
+                id, authentication.getName(), request.reason()));
+    }
+
+    @GetMapping("/cancellation-requests")
+    public ResponseEntity<List<AppointmentCancellationResponse>> getCancellationRequests(
+            Authentication authentication) {
+        boolean admin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        return ResponseEntity.ok(appointmentService.getCancellationRequests(authentication.getName(), admin));
+    }
+
+    @PatchMapping("/{id}/cancellation")
+    public ResponseEntity<AppointmentCancellationResponse> reviewCancellation(
+            @PathVariable Long id,
+            @Valid @RequestBody AppointmentCancellationRequest request,
+            Authentication authentication) {
+        boolean admin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        return ResponseEntity.ok(appointmentService.reviewCancellation(
+                id, request.decision(), authentication.getName(), admin));
     }
 
     @PatchMapping("/{id}/assign")
