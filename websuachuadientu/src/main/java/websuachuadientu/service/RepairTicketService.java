@@ -9,11 +9,15 @@ import websuachuadientu.dto.RepairHistoryResponse;
 import websuachuadientu.entity.Customer;
 import websuachuadientu.entity.Employee;
 import websuachuadientu.entity.RepairTicket;
+import websuachuadientu.entity.RepairTicketActivity;
+import websuachuadientu.dto.RepairTicketActivityResponse;
 import websuachuadientu.repository.CustomerRepository;
 import websuachuadientu.repository.EmployeeRepository;
 import websuachuadientu.repository.RepairTicketRepository;
 import websuachuadientu.repository.AppointmentRepository;
 import websuachuadientu.repository.ServiceItemRepository;
+import websuachuadientu.repository.RepairTicketActivityRepository;
+import websuachuadientu.enums.RepairTicketStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -27,6 +31,7 @@ public class RepairTicketService {
     private final EmployeeRepository employeeRepository;
     private final AppointmentRepository appointmentRepository;
     private final ServiceItemRepository serviceItemRepository;
+    private final RepairTicketActivityRepository activityRepository;
 
     @Transactional
     public RepairTicketResponse createForAppointment(websuachuadientu.entity.Appointment appointment) {
@@ -44,7 +49,7 @@ public class RepairTicketService {
         ticket.setCustomer(appointment.getCustomer());
         ticket.setDevice(appointment.getDevice());
         ticket.setReceivedDate(appointment.getAppointmentDate());
-        ticket.setStatus("SCHEDULED");
+        ticket.setStatus(RepairTicketStatus.SCHEDULED.storedValue());
         ticket.setTechnician(appointment.getTechnician());
         ticket.setAppointment(appointment);
         ticket.setService(appointment.getService());
@@ -70,6 +75,10 @@ public class RepairTicketService {
 
     @Transactional
     public RepairTicketResponse create(RepairTicketRequest request) {
+        if (request.getStatus() != RepairTicketStatus.SCHEDULED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "A new repair ticket must start in SCHEDULED status");
+        }
         RepairTicket ticket = new RepairTicket();
         if (request.getAppointmentId() != null) {
             var appointment = appointmentRepository.findById(request.getAppointmentId())
@@ -89,8 +98,8 @@ public class RepairTicketService {
             }
             ticket.setCustomer(appointment.getCustomer());
             ticket.setDevice(appointment.getDevice());
-            ticket.setReceivedDate(request.getReceivedDate());
-            ticket.setStatus(request.getStatus().trim());
+            ticket.setReceivedDate(appointment.getAppointmentDate());
+            ticket.setStatus(RepairTicketStatus.SCHEDULED.storedValue());
             ticket.setTechnician(appointment.getTechnician());
             ticket.setAppointment(appointment);
             ticket.setService(appointment.getService());
@@ -113,17 +122,61 @@ public class RepairTicketService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Only an admin can reassign a repair ticket");
         }
-        if (!ticket.getStatus().equals(request.getStatus().trim())) {
+        if (!ticket.getStatus().equals(request.getStatus().storedValue())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Change ticket status through PATCH /api/repair-tickets/{id}/status with evidence photos");
         }
+        List<String> changedFields = new java.util.ArrayList<>();
+        if (!ticket.getDevice().equals(request.getDevice().trim())) {
+            changedFields.add("device: " + ticket.getDevice() + " -> " + request.getDevice().trim());
+        }
+        if (!ticket.getReceivedDate().equals(request.getReceivedDate())) {
+            changedFields.add("receivedDate: " + ticket.getReceivedDate() + " -> " + request.getReceivedDate());
+        }
+        if (!ticket.getCustomer().getId().equals(request.getCustomerId())) {
+            changedFields.add("customerId: " + ticket.getCustomer().getId() + " -> " + request.getCustomerId());
+        }
+        if (request.getTechnicianId() == null
+                ? ticket.getTechnician() != null
+                : ticket.getTechnician() == null || !ticket.getTechnician().getId().equals(request.getTechnicianId())) {
+            changedFields.add("technicianId: "
+                    + (ticket.getTechnician() == null ? null : ticket.getTechnician().getId())
+                    + " -> " + request.getTechnicianId());
+        }
+        if (request.getServiceId() != null
+                && (ticket.getService() == null || !ticket.getService().getId().equals(request.getServiceId()))) {
+            changedFields.add("serviceId: "
+                    + (ticket.getService() == null ? null : ticket.getService().getId())
+                    + " -> " + request.getServiceId());
+        }
         apply(ticket, request);
-        if (("Hoàn thành".equalsIgnoreCase(request.getStatus())
-                || "COMPLETED".equalsIgnoreCase(request.getStatus()))
-                && ticket.getCompletedDate() == null) {
+        if (request.getStatus() == RepairTicketStatus.COMPLETED && ticket.getCompletedDate() == null) {
             ticket.setCompletedDate(java.time.LocalDate.now());
         }
-        return toResponse(ticketRepository.save(ticket));
+        RepairTicket saved = ticketRepository.save(ticket);
+        if (!changedFields.isEmpty() || (request.getNote() != null && !request.getNote().isBlank())) {
+            RepairTicketActivity activity = new RepairTicketActivity();
+            activity.setRepairTicket(saved);
+            activity.setEmployee(employeeRepository.findByUser_Email(email).orElse(null));
+            activity.setAction("TICKET_UPDATED");
+            activity.setDetails(changedFields.isEmpty() ? null : String.join(" | ", changedFields));
+            activity.setNote(request.getNote() == null || request.getNote().isBlank()
+                    ? null : request.getNote().trim());
+            activityRepository.save(activity);
+        }
+        return toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RepairTicketActivityResponse> getHistory(Long id, String email, boolean admin) {
+        RepairTicket ticket = findTicket(id);
+        ensureAssigned(ticket, email, admin);
+        return activityRepository.findByRepairTicket_IdOrderByCreatedAtAscIdAsc(id).stream()
+                .map(activity -> new RepairTicketActivityResponse(
+                        activity.getId(), activity.getAction(), activity.getDetails(), activity.getNote(),
+                        activity.getEmployee() == null ? "Admin" : activity.getEmployee().getFullName(),
+                        activity.getCreatedAt()))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -163,7 +216,7 @@ public class RepairTicketService {
         ticket.setCustomer(customer);
         ticket.setDevice(request.getDevice().trim());
         ticket.setReceivedDate(request.getReceivedDate());
-        ticket.setStatus(request.getStatus().trim());
+        ticket.setStatus(request.getStatus().storedValue());
         ticket.setTechnician(technician);
         if (request.getServiceId() != null) {
             ticket.setService(serviceItemRepository.findById(request.getServiceId())

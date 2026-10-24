@@ -34,6 +34,12 @@ public class AppointmentService {
         return appointmentRepository.findAllByOrderByAppointmentDateAscAppointmentTimeAsc();
     }
 
+    @Transactional(readOnly = true)
+    public List<AssignedAppointmentResponse> getPending() {
+        return appointmentRepository.findByStatusOrderByAppointmentDateAscAppointmentTimeAsc("PENDING")
+                .stream().map(this::toAssignedResponse).toList();
+    }
+
     public List<Appointment> getByContactPhone(String contactPhone) {
         return appointmentRepository.findByContactPhoneOrderByAppointmentDateAscAppointmentTimeAsc(
                 contactPhone.trim());
@@ -47,21 +53,24 @@ public class AppointmentService {
     public List<AssignedAppointmentResponse> getAssignedToEmployee(String email) {
         return appointmentRepository.findByTechnician_User_EmailOrderByAppointmentDateAscAppointmentTimeAsc(email)
                 .stream()
-                .map(appointment -> new AssignedAppointmentResponse(
-                        appointment.getId(),
-                        appointment.getCustomer() == null ? null : appointment.getCustomer().getId(),
-                        appointment.getCustomer() == null ? null : appointment.getCustomer().getFullName(),
-                        appointment.getDevice(),
-                        appointment.getService().getId(),
-                        appointment.getService().getName(),
-                        appointment.getAppointmentDate(),
-                        appointment.getAppointmentTime(),
-                        appointment.getServiceMethod(),
-                        appointment.getContactPhone(),
-                        appointment.getProblemDescription(),
-                        appointment.getPickupAddress(),
-                        appointment.getStatus()
-                )).toList();
+                .map(this::toAssignedResponse).toList();
+    }
+
+    private AssignedAppointmentResponse toAssignedResponse(Appointment appointment) {
+        return new AssignedAppointmentResponse(
+                appointment.getId(),
+                appointment.getCustomer() == null ? null : appointment.getCustomer().getId(),
+                appointment.getCustomer() == null ? null : appointment.getCustomer().getFullName(),
+                appointment.getDevice(),
+                appointment.getService().getId(),
+                appointment.getService().getName(),
+                appointment.getAppointmentDate(),
+                appointment.getAppointmentTime(),
+                appointment.getServiceMethod(),
+                appointment.getContactPhone(),
+                appointment.getProblemDescription(),
+                appointment.getPickupAddress(),
+                appointment.getStatus());
     }
 
     @Transactional
@@ -74,11 +83,17 @@ public class AppointmentService {
                     .orElseThrow(() -> new IllegalStateException("Không tìm thấy hồ sơ khách hàng"));
             appointment.setCustomer(customer);
         }
-        appointment = appointmentRepository.save(appointment);
-        if (customerAccount) {
-            return assignLeastBusyTechnician(appointment.getId());
+        if (!customerAccount && request.getCustomerId() != null) {
+            Customer customer = customerRepository.findById(request.getCustomerId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Customer not found"));
+            appointment.setCustomer(customer);
         }
-        return appointment;
+        if (!customerAccount && request.getCustomerId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "customerId is required when staff creates an appointment");
+        }
+        return appointmentRepository.save(appointment);
     }
 
     @Transactional
@@ -109,6 +124,10 @@ public class AppointmentService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Past appointment times cannot be assigned");
         }
+        if (appointment.getCustomer() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Appointment must be linked to a customer before confirmation");
+        }
         List<String> activeAppointmentStatuses = List.of("CONFIRMED", "IN_PROGRESS");
         List<String> busyAppointmentStatuses = List.of("CONFIRMED", "IN_PROGRESS", "CONVERTED");
         List<String> terminalTicketStatuses = List.of(
@@ -136,6 +155,38 @@ public class AppointmentService {
         return assigned;
     }
 
+    @Transactional
+    public Appointment assignToEmployee(Long appointmentId, String employeeEmail) {
+        Appointment appointment = appointmentRepository.findPendingById(appointmentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Appointment was not found or is no longer pending"));
+        if (appointment.getAppointmentDate().isBefore(java.time.LocalDate.now())
+                || (appointment.getAppointmentDate().isEqual(java.time.LocalDate.now())
+                && !appointment.getAppointmentTime().isAfter(java.time.LocalTime.now()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Past appointment times cannot be assigned");
+        }
+        if (appointment.getCustomer() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Appointment must be linked to a customer before confirmation");
+        }
+        Employee technician = employeeRepository.findByUser_Email(employeeEmail)
+                .filter(employee -> "ACTIVE".equals(employee.getStatus()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Only an active employee can confirm an appointment"));
+        List<String> busyStatuses = List.of("CONFIRMED", "IN_PROGRESS", "CONVERTED");
+        if (appointmentRepository.existsByTechnician_IdAndAppointmentDateAndAppointmentTimeAndStatusIn(
+                technician.getId(), appointment.getAppointmentDate(), appointment.getAppointmentTime(), busyStatuses)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "You already have work assigned for this time slot");
+        }
+        appointment.setTechnician(technician);
+        appointment.setStatus("CONFIRMED");
+        Appointment confirmed = appointmentRepository.save(appointment);
+        repairTicketService.createForAppointment(confirmed);
+        return confirmed;
+    }
+
     private Appointment getPendingAppointmentForCustomer(Long appointmentId, String userEmail) {
         Appointment appointment = appointmentRepository.findByIdAndCustomer_User_Email(appointmentId, userEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lịch hẹn"));
@@ -147,6 +198,12 @@ public class AppointmentService {
     }
 
     private void updateAppointment(Appointment appointment, AppointmentRequest request) {
+        if (request.getAppointmentDate().isBefore(java.time.LocalDate.now())
+                || (request.getAppointmentDate().isEqual(java.time.LocalDate.now())
+                && !request.getAppointmentTime().isAfter(java.time.LocalTime.now()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Appointment date and time must be in the future");
+        }
         ServiceItem service = serviceItemRepository.findById(request.getServiceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy dịch vụ"));
         if (!"ACTIVE".equals(service.getStatus())) {

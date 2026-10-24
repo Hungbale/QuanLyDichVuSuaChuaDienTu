@@ -10,11 +10,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import websuachuadientu.dto.RepairTicketRequest;
 import websuachuadientu.dto.RepairTicketResponse;
+import websuachuadientu.dto.RepairTicketActivityResponse;
 import websuachuadientu.dto.RepairHistoryResponse;
 import websuachuadientu.service.RepairTicketService;
 import websuachuadientu.service.RepairTrackingService;
 import websuachuadientu.dto.RepairStatusUpdateResponse;
 import websuachuadientu.dto.RepairTrackingResponse;
+import websuachuadientu.dto.RepairIntakeRequest;
+import websuachuadientu.dto.RepairIntakeResponse;
+import websuachuadientu.service.RepairIntakeService;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -27,6 +31,7 @@ import java.util.Map;
 public class RepairTicketController {
     private final RepairTicketService ticketService;
     private final RepairTrackingService trackingService;
+    private final RepairIntakeService intakeService;
 
     @GetMapping
     public ResponseEntity<List<RepairTicketResponse>> search(
@@ -61,6 +66,29 @@ public class RepairTicketController {
             @Valid @RequestBody RepairTicketRequest request,
             Authentication authentication) {
         return ResponseEntity.ok(ticketService.update(id, request, authentication.getName(), isAdmin(authentication)));
+    }
+
+    @GetMapping("/{id}/history")
+    public ResponseEntity<List<RepairTicketActivityResponse>> getHistory(
+            @PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(ticketService.getHistory(
+                id, authentication.getName(), isAdmin(authentication)));
+    }
+
+    @PostMapping("/{id}/intake")
+    public ResponseEntity<RepairIntakeResponse> receiveDevice(
+            @PathVariable Long id,
+            @Valid @RequestBody RepairIntakeRequest request,
+            Authentication authentication) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(intakeService.receive(
+                id, request, authentication.getName(), isAdmin(authentication)));
+    }
+
+    @GetMapping("/{id}/intake")
+    public ResponseEntity<RepairIntakeResponse> getIntake(
+            @PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(intakeService.getByTicket(
+                id, authentication.getName(), isAdmin(authentication)));
     }
 
     @PatchMapping(value = "/{id}/status", consumes = "multipart/form-data")

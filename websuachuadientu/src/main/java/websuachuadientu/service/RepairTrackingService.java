@@ -15,6 +15,7 @@ import websuachuadientu.entity.RepairStatusUpdate;
 import websuachuadientu.repository.EmployeeRepository;
 import websuachuadientu.repository.RepairStatusUpdateRepository;
 import websuachuadientu.repository.RepairTicketRepository;
+import websuachuadientu.enums.RepairTicketStatus;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -44,12 +45,34 @@ public class RepairTrackingService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Only the assigned technician can update this repair ticket");
         }
-        if (status == null || status.isBlank() || status.trim().length() > 50) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required and must be at most 50 characters");
+        RepairTicketStatus requestedStatus;
+        try {
+            requestedStatus = RepairTicketStatus.fromValue(status);
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unsupported repair ticket status", exception);
         }
-        String nextStatus = status.trim();
+        if (requestedStatus == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
+        }
+        if (requestedStatus == RepairTicketStatus.RECEIVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Use POST /api/repair-tickets/{id}/intake to receive a device");
+        }
+        String nextStatus = requestedStatus.storedValue();
         if (nextStatus.equals(ticket.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The ticket is already in this status");
+        }
+        RepairTicketStatus currentStatus;
+        try {
+            currentStatus = RepairTicketStatus.fromValue(ticket.getStatus());
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Current ticket status must be reviewed before it can be changed", exception);
+        }
+        if (currentStatus == null || !currentStatus.canTransitionTo(requestedStatus)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Repair ticket status transition is not allowed");
         }
         if (images == null || images.isEmpty() || images.size() > MAX_PHOTOS) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -68,7 +91,7 @@ public class RepairTrackingService {
         }
 
         ticket.setStatus(nextStatus);
-        if (isCompleted(nextStatus) && ticket.getCompletedDate() == null) {
+        if (requestedStatus == RepairTicketStatus.COMPLETED && ticket.getCompletedDate() == null) {
             ticket.setCompletedDate(LocalDate.now());
         }
         ticketRepository.save(ticket);
@@ -139,7 +162,4 @@ public class RepairTrackingService {
                 update.getCreatedAt(), update.getEmployee() == null ? "Admin" : update.getEmployee().getFullName(), photos);
     }
 
-    private boolean isCompleted(String status) {
-        return "COMPLETED".equalsIgnoreCase(status) || "HOÀN THÀNH".equalsIgnoreCase(status);
-    }
 }
