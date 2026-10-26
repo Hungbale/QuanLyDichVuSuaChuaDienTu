@@ -97,7 +97,8 @@ public class RepairDiagnosisService {
     private RepairDiagnosisResponse toResponse(RepairDiagnosis diagnosis) {
         var ticket = diagnosis.getRepairTicket();
         String issue = intakeRepository.findByRepairTicket_Id(ticket.getId())
-                .map(receipt -> receipt.getCustomerReportedIssue())
+                .map(receipt -> receipt.getIntakeNote() != null && !receipt.getIntakeNote().isBlank()
+                        ? receipt.getIntakeNote() : receipt.getCustomerReportedIssue())
                 .orElseGet(() -> ticket.getAppointment() == null
                         ? null : ticket.getAppointment().getProblemDescription());
         return new RepairDiagnosisResponse(diagnosis.getId(), ticket.getId(), ticket.getTicketCode(),

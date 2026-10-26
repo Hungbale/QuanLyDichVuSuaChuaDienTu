@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "repair_intake_receipts")
@@ -40,6 +42,9 @@ public class RepairIntakeReceipt {
 
     @Column(nullable = false)
     private LocalDateTime receivedAt;
+
+    @OneToMany(mappedBy = "intakeReceipt", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RepairIntakePhoto> photos = new ArrayList<>();
 
     @PrePersist
     void onCreate() {

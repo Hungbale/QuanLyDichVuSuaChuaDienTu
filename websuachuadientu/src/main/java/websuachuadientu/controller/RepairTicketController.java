@@ -79,13 +79,14 @@ public class RepairTicketController {
                 id, authentication.getName(), isAdmin(authentication)));
     }
 
-    @PostMapping("/{id}/intake")
+    @PostMapping(value = "/{id}/intake", consumes = "multipart/form-data")
     public ResponseEntity<RepairIntakeResponse> receiveDevice(
             @PathVariable Long id,
-            @Valid @RequestBody RepairIntakeRequest request,
+            @Valid @ModelAttribute RepairIntakeRequest request,
+            @RequestParam("images") List<MultipartFile> images,
             Authentication authentication) {
         return ResponseEntity.status(HttpStatus.CREATED).body(intakeService.receive(
-                id, request, authentication.getName(), isAdmin(authentication)));
+                id, request, images, authentication.getName(), isAdmin(authentication)));
     }
 
     @GetMapping("/{id}/intake")
