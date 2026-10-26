@@ -14,5 +14,6 @@ public record RepairIntakeResponse(
         String customerReportedIssue,
         String intakeNote,
         String receivedBy,
-        LocalDateTime receivedAt
+        LocalDateTime receivedAt,
+        java.util.List<RepairStatusPhotoResponse> photos
 ) {}

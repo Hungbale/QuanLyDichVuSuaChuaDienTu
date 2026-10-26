@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import websuachuadientu.dto.AppointmentRequest;
 import websuachuadientu.dto.AssignedAppointmentResponse;
+import websuachuadientu.dto.AssignedAppointmentGroupsResponse;
 import websuachuadientu.dto.AppointmentAvailabilityResponse;
 import websuachuadientu.dto.AppointmentCancellationResponse;
 import websuachuadientu.entity.Appointment;
@@ -69,7 +70,8 @@ public class AppointmentService {
     private AppointmentAvailabilityResponse availability(java.time.LocalDate date,
                                                           java.time.LocalTime time,
                                                           Long excludedAppointmentId) {
-        List<String> busyStatuses = List.of("CONFIRMED", "CANCELLATION_REQUESTED", "IN_PROGRESS", "CONVERTED");
+        List<String> busyStatuses = List.of(
+                "CONFIRMED", "CANCELLATION_REQUESTED", "RECEIVED", "IN_PROGRESS", "CONVERTED");
         int freeTechnicians = (int) employeeRepository.findByStatus("ACTIVE").stream()
                 .filter(employee -> !appointmentRepository
                         .existsByTechnician_IdAndAppointmentDateAndAppointmentTimeAndStatusIn(
@@ -94,6 +96,18 @@ public class AppointmentService {
         return appointmentRepository.findByTechnician_User_EmailOrderByAppointmentDateAscAppointmentTimeAsc(email)
                 .stream()
                 .map(this::toAssignedResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AssignedAppointmentGroupsResponse getAssignedAppointmentGroups(String email) {
+        List<AssignedAppointmentResponse> appointments = getAssignedToEmployee(email);
+        return new AssignedAppointmentGroupsResponse(
+                appointments.stream().filter(appointment -> List.of(
+                        "PENDING", "CONFIRMED", "CANCELLATION_REQUESTED").contains(appointment.status())).toList(),
+                appointments.stream().filter(appointment -> "RECEIVED".equals(appointment.status())).toList(),
+                appointments.stream().filter(appointment -> !List.of(
+                        "PENDING", "CONFIRMED", "CANCELLATION_REQUESTED", "RECEIVED")
+                        .contains(appointment.status())).toList());
     }
 
     private AssignedAppointmentResponse toAssignedResponse(Appointment appointment) {
@@ -239,9 +253,9 @@ public class AppointmentService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Appointment must be linked to a customer before confirmation");
         }
-        List<String> activeAppointmentStatuses = List.of("CONFIRMED", "IN_PROGRESS");
+        List<String> activeAppointmentStatuses = List.of("CONFIRMED", "RECEIVED", "IN_PROGRESS");
         List<String> busyAppointmentStatuses = List.of(
-                "CONFIRMED", "CANCELLATION_REQUESTED", "IN_PROGRESS", "CONVERTED");
+                "CONFIRMED", "CANCELLATION_REQUESTED", "RECEIVED", "IN_PROGRESS", "CONVERTED");
         List<String> terminalTicketStatuses = List.of(
                 "COMPLETED", "Hoàn thành", "CANCELLED", "Khách từ chối");
 
@@ -287,7 +301,7 @@ public class AppointmentService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
                         "Only an active employee can confirm an appointment"));
         List<String> busyStatuses = List.of(
-                "CONFIRMED", "CANCELLATION_REQUESTED", "IN_PROGRESS", "CONVERTED");
+                "CONFIRMED", "CANCELLATION_REQUESTED", "RECEIVED", "IN_PROGRESS", "CONVERTED");
         if (appointmentRepository.existsByTechnician_IdAndAppointmentDateAndAppointmentTimeAndStatusIn(
                 technician.getId(), appointment.getAppointmentDate(), appointment.getAppointmentTime(), busyStatuses)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,

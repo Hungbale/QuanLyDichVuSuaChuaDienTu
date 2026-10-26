@@ -14,6 +14,9 @@ import websuachuadientu.entity.RepairTicket;
 import websuachuadientu.repository.RepairQuoteRepository;
 import websuachuadientu.repository.RepairTicketRepository;
 import websuachuadientu.repository.RepairDiagnosisRepository;
+import websuachuadientu.repository.RepairTicketActivityRepository;
+import websuachuadientu.repository.EmployeeRepository;
+import websuachuadientu.entity.RepairTicketActivity;
 import websuachuadientu.enums.RepairQuoteDecision;
 import websuachuadientu.enums.RepairTicketStatus;
 
@@ -26,6 +29,8 @@ public class RepairQuoteService {
     private final RepairQuoteRepository quoteRepository;
     private final RepairTicketRepository ticketRepository;
     private final RepairDiagnosisRepository diagnosisRepository;
+    private final RepairTicketActivityRepository activityRepository;
+    private final EmployeeRepository employeeRepository;
 
     @Transactional
     public RepairQuoteResponse create(Long ticketId, RepairQuoteRequest request, String email, boolean admin) {
@@ -48,6 +53,9 @@ public class RepairQuoteService {
         quote = quoteRepository.save(quote);
         quote.setQuoteCode("BG%06d".formatted(quote.getId()));
         ticketRepository.save(ticket);
+        saveActivity(ticket, employeeRepository.findByUser_Email(email).orElse(null),
+                "QUOTE_CREATED", "Báo giá " + quote.getQuoteCode() + " đã được gửi. Tổng tiền: "
+                        + quote.getTotalAmount());
         return toResponse(quoteRepository.save(quote));
     }
 
@@ -77,6 +85,7 @@ public class RepairQuoteService {
         quote.setStatus(decision.name());
         transitionTicket(quote.getRepairTicket(), decision == RepairQuoteDecision.ACCEPTED
                 ? RepairTicketStatus.REPAIRING : RepairTicketStatus.CUSTOMER_DECLINED);
+        saveDecisionActivity(quote, decision);
         return toResponse(quoteRepository.save(quote));
     }
 
@@ -90,7 +99,26 @@ public class RepairQuoteService {
         quote.setStatus(decision.name());
         transitionTicket(quote.getRepairTicket(), decision == RepairQuoteDecision.ACCEPTED
                 ? RepairTicketStatus.REPAIRING : RepairTicketStatus.CUSTOMER_DECLINED);
+        saveDecisionActivity(quote, decision);
         return toResponse(quoteRepository.save(quote));
+    }
+
+    private void saveDecisionActivity(RepairQuote quote, RepairQuoteDecision decision) {
+        String action = decision == RepairQuoteDecision.ACCEPTED
+                ? "CUSTOMER_QUOTE_ACCEPTED" : "CUSTOMER_QUOTE_DECLINED";
+        saveActivity(quote.getRepairTicket(), null, action,
+                "Khách hàng " + (decision == RepairQuoteDecision.ACCEPTED ? "đã xác nhận" : "đã từ chối")
+                        + " báo giá " + quote.getQuoteCode() + ". Tổng tiền: " + quote.getTotalAmount());
+    }
+
+    private void saveActivity(RepairTicket ticket, websuachuadientu.entity.Employee employee,
+                              String action, String details) {
+        RepairTicketActivity activity = new RepairTicketActivity();
+        activity.setRepairTicket(ticket);
+        activity.setEmployee(employee);
+        activity.setAction(action);
+        activity.setDetails(details);
+        activityRepository.save(activity);
     }
 
     private void ensureCustomerOwns(RepairTicket ticket, String email) {

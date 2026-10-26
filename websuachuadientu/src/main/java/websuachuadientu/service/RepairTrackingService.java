@@ -9,6 +9,7 @@ import org.springframework.web.server.ResponseStatusException;
 import websuachuadientu.dto.RepairStatusPhotoResponse;
 import websuachuadientu.dto.RepairStatusUpdateResponse;
 import websuachuadientu.dto.RepairTrackingResponse;
+import websuachuadientu.dto.RepairTimelineEventResponse;
 import websuachuadientu.entity.Employee;
 import websuachuadientu.entity.RepairStatusPhoto;
 import websuachuadientu.entity.RepairStatusUpdate;
@@ -16,12 +17,19 @@ import websuachuadientu.repository.EmployeeRepository;
 import websuachuadientu.repository.RepairStatusUpdateRepository;
 import websuachuadientu.repository.RepairTicketRepository;
 import websuachuadientu.repository.AppointmentRepository;
+import websuachuadientu.entity.RepairTicketActivity;
+import websuachuadientu.repository.RepairTicketActivityRepository;
+import websuachuadientu.repository.RepairIntakeReceiptRepository;
+import websuachuadientu.repository.RepairDiagnosisRepository;
+import websuachuadientu.repository.RepairQuoteRepository;
 import websuachuadientu.enums.RepairTicketStatus;
 
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Base64;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +41,10 @@ public class RepairTrackingService {
     private final AppointmentRepository appointmentRepository;
     private final RepairStatusUpdateRepository updateRepository;
     private final EmployeeRepository employeeRepository;
+    private final RepairTicketActivityRepository activityRepository;
+    private final RepairIntakeReceiptRepository intakeRepository;
+    private final RepairDiagnosisRepository diagnosisRepository;
+    private final RepairQuoteRepository quoteRepository;
 
     @Transactional
     public RepairStatusUpdateResponse updateStatus(
@@ -67,7 +79,11 @@ public class RepairTrackingService {
                     "Use POST /api/repair-tickets/{id}/intake to receive a device");
         }
         String nextStatus = requestedStatus.storedValue();
-        if (nextStatus.equals(ticket.getStatus())) {
+        boolean sameStatus = nextStatus.equalsIgnoreCase(ticket.getStatus());
+        boolean repeatableProgressStatus = requestedStatus == RepairTicketStatus.REPAIRING
+                || requestedStatus == RepairTicketStatus.IN_PROGRESS
+                || requestedStatus == RepairTicketStatus.WAITING_FOR_PARTS;
+        if (sameStatus && !repeatableProgressStatus) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The ticket is already in this status");
         }
         RepairTicketStatus currentStatus;
@@ -81,12 +97,12 @@ public class RepairTrackingService {
                 || requestedStatus == RepairTicketStatus.WAITING_FOR_QUOTE_APPROVAL
                 || requestedStatus == RepairTicketStatus.CUSTOMER_DECLINED
                 || (requestedStatus == RepairTicketStatus.REPAIRING
-                && currentStatus != RepairTicketStatus.WAITING_FOR_PARTS);
+                && currentStatus != RepairTicketStatus.WAITING_FOR_PARTS && !sameStatus);
         if (statusHasDedicatedWorkflow) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Use the intake, diagnosis, or quote API for this status transition");
         }
-        if (currentStatus == null || !currentStatus.canTransitionTo(requestedStatus)) {
+        if (currentStatus == null || (!sameStatus && !currentStatus.canTransitionTo(requestedStatus))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Repair ticket status transition is not allowed");
         }
@@ -115,7 +131,15 @@ public class RepairTrackingService {
             ticket.getAppointment().setStatus("CANCELLED");
             appointmentRepository.save(ticket.getAppointment());
         }
-        return toResponse(updateRepository.save(update));
+        RepairStatusUpdate savedUpdate = updateRepository.save(update);
+        RepairTicketActivity activity = new RepairTicketActivity();
+        activity.setRepairTicket(ticket);
+        activity.setEmployee(employee);
+        activity.setAction("STATUS_UPDATED");
+        activity.setDetails("Trạng thái phiếu: " + nextStatus);
+        activity.setNote(savedUpdate.getNote());
+        activityRepository.save(activity);
+        return toResponse(savedUpdate);
     }
 
     @Transactional(readOnly = true)
@@ -136,9 +160,69 @@ public class RepairTrackingService {
         List<RepairStatusUpdateResponse> updates = updateRepository
                 .findByRepairTicket_IdOrderByCreatedAtAsc(ticketId).stream()
                 .map(this::toResponse).toList();
+        List<RepairTimelineEventResponse> timeline = buildTimeline(ticketId, updates);
         return new RepairTrackingResponse(ticket.getId(), ticket.getTicketCode(),
                 ticket.getService() == null ? null : ticket.getService().getName(), ticket.getDevice(),
-                ticket.getStatus(), updates);
+                ticket.getStatus(), updates, timeline);
+    }
+
+    private List<RepairTimelineEventResponse> buildTimeline(
+            Long ticketId, List<RepairStatusUpdateResponse> updates) {
+        List<RepairTimelineEventResponse> events = new ArrayList<>();
+        intakeRepository.findByRepairTicket_Id(ticketId).ifPresent(receipt -> events.add(
+                new RepairTimelineEventResponse("DEVICE_RECEIVED", "Đã tiếp nhận thiết bị",
+                        joinDetails("Số serial: " + receipt.getSerialNumber(),
+                                "Tình trạng: " + receipt.getAppearanceCondition(),
+                                "Phụ kiện: " + receipt.getIncludedAccessories(),
+                                "Lỗi khách báo: " + receipt.getCustomerReportedIssue()),
+                        receipt.getIntakeNote(), receipt.getReceivedAt(),
+                        receipt.getReceivedBy() == null ? "Admin" : receipt.getReceivedBy().getFullName())));
+
+        diagnosisRepository.findByRepairTicket_Id(ticketId).ifPresent(diagnosis -> events.add(
+                new RepairTimelineEventResponse("DIAGNOSIS_RECORDED", "Đã chẩn đoán thiết bị",
+                        joinDetails("Kết quả chẩn đoán: " + diagnosis.getDiagnosisResult(),
+                                "Đề xuất sửa chữa: " + diagnosis.getRepairProposal()),
+                        diagnosis.getTechnicalNote(), diagnosis.getDiagnosedAt(),
+                        diagnosis.getDiagnosedBy() == null ? "Admin" : diagnosis.getDiagnosedBy().getFullName())));
+
+        quoteRepository.findByRepairTicket_Id(ticketId).ifPresent(quote -> events.add(
+                new RepairTimelineEventResponse("QUOTE_CREATED", "Đã gửi báo giá",
+                        "Báo giá " + quote.getQuoteCode() + " — tổng tiền: " + quote.getTotalAmount()
+                                + " — trạng thái: " + quote.getStatus(),
+                        null, quote.getCreatedAt(), "Nhân viên")));
+
+        updates.forEach(update -> events.add(new RepairTimelineEventResponse(
+                "STATUS_UPDATED", "Cập nhật tiến độ: " + update.status(), update.status(),
+                update.note(), update.createdAt(), update.employeeName())));
+
+        activityRepository.findByRepairTicket_IdOrderByCreatedAtAscIdAsc(ticketId).stream()
+                .filter(activity -> !List.of("DEVICE_RECEIVED", "DIAGNOSIS_RECORDED", "DIAGNOSIS_UPDATED",
+                        "QUOTE_CREATED", "STATUS_UPDATED").contains(activity.getAction()))
+                .forEach(activity -> events.add(new RepairTimelineEventResponse(
+                        activity.getAction(), activityTitle(activity.getAction()), activity.getDetails(),
+                        activity.getNote(), activity.getCreatedAt(), activity.getEmployee() == null
+                        ? (activity.getAction().startsWith("CUSTOMER_") ? "Khách hàng" : "Admin")
+                        : activity.getEmployee().getFullName())));
+
+        events.sort(Comparator.comparing(RepairTimelineEventResponse::createdAt,
+                Comparator.nullsLast(Comparator.naturalOrder())));
+        return events;
+    }
+
+    private String joinDetails(String... values) {
+        return java.util.Arrays.stream(values)
+                .filter(value -> value != null && !value.substring(value.indexOf(':') + 1).isBlank()
+                        && !"null".equalsIgnoreCase(value.substring(value.indexOf(':') + 1).trim()))
+                .collect(java.util.stream.Collectors.joining("\n"));
+    }
+
+    private String activityTitle(String action) {
+        return switch (action) {
+            case "CUSTOMER_QUOTE_ACCEPTED" -> "Khách hàng xác nhận báo giá";
+            case "CUSTOMER_QUOTE_DECLINED" -> "Khách hàng từ chối báo giá";
+            case "TICKET_UPDATED" -> "Cập nhật phiếu sửa chữa";
+            default -> action;
+        };
     }
 
     private RepairStatusPhoto toPhoto(MultipartFile file, RepairStatusUpdate update) {

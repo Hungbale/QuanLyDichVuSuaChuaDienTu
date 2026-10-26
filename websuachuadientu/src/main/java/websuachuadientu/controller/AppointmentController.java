@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import websuachuadientu.dto.AppointmentRequest;
 import websuachuadientu.dto.AssignedAppointmentResponse;
+import websuachuadientu.dto.AssignedAppointmentGroupsResponse;
 import websuachuadientu.dto.AppointmentAvailabilityResponse;
 import websuachuadientu.dto.AppointmentCancellationReasonRequest;
 import websuachuadientu.dto.AppointmentCancellationRequest;
@@ -56,6 +57,12 @@ public class AppointmentController {
     @GetMapping("/assigned/me")
     public ResponseEntity<List<AssignedAppointmentResponse>> getAssignedToMe(Authentication authentication) {
         return ResponseEntity.ok(appointmentService.getAssignedToEmployee(authentication.getName()));
+    }
+
+    @GetMapping("/assigned/me/groups")
+    public ResponseEntity<AssignedAppointmentGroupsResponse> getAssignedAppointmentGroups(
+            Authentication authentication) {
+        return ResponseEntity.ok(appointmentService.getAssignedAppointmentGroups(authentication.getName()));
     }
 
     @PostMapping
