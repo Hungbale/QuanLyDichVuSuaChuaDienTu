@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { checkAppointmentAvailabilityApi } from "../../api/appointmentApi";
 import type { AppointmentRequest } from "../../types/appointment";
 import type { ServiceItem } from "../../types/service";
 
@@ -9,6 +10,7 @@ interface AppointmentFormProps {
     submitLabel: string;
     onSubmit: (values: AppointmentRequest) => void | Promise<void>;
     onCancel?: () => void;
+    blockUnavailableSlot?: boolean;
 }
 
 function AppointmentForm({
@@ -18,8 +20,30 @@ function AppointmentForm({
     submitLabel,
     onSubmit,
     onCancel,
+    blockUnavailableSlot = false,
 }: AppointmentFormProps) {
     const [values, setValues] = useState<AppointmentRequest>(initialValues);
+    const [availability, setAvailability] = useState<{ available: boolean; remainingCapacity: number } | null>(null);
+    const [checkingAvailability, setCheckingAvailability] = useState(false);
+    const [availabilityError, setAvailabilityError] = useState("");
+
+    useEffect(() => {
+        if (!values.appointmentDate || !values.appointmentTime) return;
+        let active = true;
+        const timer = window.setTimeout(() => {
+            setCheckingAvailability(true);
+            setAvailabilityError("");
+            checkAppointmentAvailabilityApi(values.appointmentDate, values.appointmentTime)
+                .then((result) => { if (active) setAvailability(result); })
+                .catch((error: any) => {
+                    if (!active) return;
+                    setAvailability(null);
+                    setAvailabilityError(error.response?.data?.message || "Chưa kiểm tra được khung giờ này.");
+                })
+                .finally(() => { if (active) setCheckingAvailability(false); });
+        }, 300);
+        return () => { active = false; window.clearTimeout(timer); };
+    }, [values.appointmentDate, values.appointmentTime]);
 
     const update = <K extends keyof AppointmentRequest>(
         field: K,
@@ -30,6 +54,10 @@ function AppointmentForm({
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (blockUnavailableSlot && availability?.available === false) {
+            setAvailabilityError("Khung giờ này đã hết chỗ. Hãy chọn ngày hoặc giờ khác.");
+            return;
+        }
         void onSubmit({
             ...values,
             device: values.device.trim(),
@@ -54,6 +82,12 @@ function AppointmentForm({
                         placeholder="Ví dụ: Laptop Dell Inspiron 15"
                         required
                     />
+                </div>
+
+                <div className="appointment-form-group appointment-form-full" aria-live="polite">
+                    {checkingAvailability ? <small>Đang kiểm tra khung giờ...</small>
+                        : availability ? <small className={availability.available ? "success-text" : "error-text"}>{availability.available ? `Còn ${availability.remainingCapacity} chỗ ở khung giờ này.` : "Khung giờ này đã hết chỗ."}</small>
+                            : availabilityError ? <small className="error-text">{availabilityError}</small> : null}
                 </div>
 
                 <div className="appointment-form-group">
@@ -159,7 +193,7 @@ function AppointmentForm({
                         Đóng
                     </button>
                 )}
-                <button className="primary-button" type="submit" disabled={submitting || services.length === 0}>
+                <button className="primary-button" type="submit" disabled={submitting || services.length === 0 || (blockUnavailableSlot && checkingAvailability)}>
                     {submitting ? "Đang lưu..." : submitLabel}
                 </button>
             </div>

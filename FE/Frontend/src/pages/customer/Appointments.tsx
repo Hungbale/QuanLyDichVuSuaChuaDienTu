@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import AppointmentForm from "../../components/common/AppointmentForm";
 import {
     cancelAppointmentApi,
     getMyAppointmentsApi,
+    requestAppointmentCancellationApi,
     updateAppointmentApi,
 } from "../../api/appointmentApi";
 import { getServicesApi } from "../../api/serviceApi";
@@ -27,6 +28,10 @@ function statusLabel(status: string) {
     if (status === "PENDING") return "Chờ xác nhận";
     if (status === "CANCELLED") return "Đã hủy";
     if (status === "CONFIRMED") return "Đã xác nhận";
+    if (status === "CANCELLATION_REQUESTED") return "Chờ duyệt hủy";
+    if (status === "RECEIVED") return "Đã tiếp nhận thiết bị";
+    if (status === "IN_PROGRESS") return "Đang xử lý phiếu sửa chữa";
+    if (status === "CONVERTED") return "Đã chuyển sang phiếu sửa chữa";
     return status;
 }
 
@@ -47,6 +52,9 @@ function CustomerAppointments() {
     const [error, setError] = useState("");
     const [success, setSuccess] = useState<string>(location.state?.success || "");
     const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+    const [viewingAppointment, setViewingAppointment] = useState<Appointment | null>(null);
+    const [cancellationTarget, setCancellationTarget] = useState<Appointment | null>(null);
+    const [cancellationReason, setCancellationReason] = useState("");
     const [activeTab, setActiveTab] = useState<AppointmentTab>("current");
 
     const groupedAppointments = useMemo(() => {
@@ -137,6 +145,25 @@ function CustomerAppointments() {
             await loadAppointments();
         } catch (requestError: any) {
             setError(requestError.response?.data?.message || "Không thể hủy lịch hẹn.");
+        }
+    };
+
+    const handleCancellationRequest = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!cancellationTarget) return;
+        setSaving(true);
+        setError("");
+        setSuccess("");
+        try {
+            await requestAppointmentCancellationApi(cancellationTarget.id, cancellationReason.trim());
+            setCancellationTarget(null);
+            setCancellationReason("");
+            setSuccess("Đã gửi yêu cầu hủy lịch. Nhân viên sẽ xem xét yêu cầu của bạn.");
+            await loadAppointments();
+        } catch (requestError: any) {
+            setError(requestError.response?.data?.message || "Không thể gửi yêu cầu hủy lịch.");
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -248,15 +275,18 @@ function CustomerAppointments() {
                                 <div><span>Thời gian</span><strong>{formatAppointmentDate(appointment.appointmentDate)} · {appointment.appointmentTime.slice(0, 5)}</strong></div>
                                 <div><span>Hình thức</span><strong>{methodLabel(appointment.serviceMethod)}</strong></div>
                                 <div><span>Liên hệ</span><strong>{appointment.contactPhone}</strong></div>
+                                {appointment.technician && <div><span>Kỹ thuật viên phụ trách</span><strong>{appointment.technician.fullName} · {appointment.technician.employeeCode}</strong></div>}
                                 {appointment.pickupAddress && <div className="appointment-detail-full"><span>Địa chỉ nhận</span><strong>{appointment.pickupAddress}</strong></div>}
                                 <div className="appointment-detail-full"><span>Mô tả tình trạng</span><strong>{appointment.problemDescription}</strong></div>
                             </div>
-                            {appointment.status === "PENDING" && (
-                                <div className="appointment-card-actions">
+                            <div className="appointment-card-actions">
+                                <button className="secondary-button" type="button" onClick={() => setViewingAppointment(appointment)}>Xem chi tiết lịch hẹn</button>
+                                {appointment.status === "PENDING" && <>
                                     <button className="secondary-button" onClick={() => beginEdit(appointment)}>Chỉnh sửa</button>
                                     <button className="danger-button" onClick={() => void handleCancel(appointment)}>Hủy lịch</button>
-                                </div>
-                            )}
+                                </>}
+                                {appointment.status === "CONFIRMED" && <button className="danger-button" type="button" onClick={() => { setCancellationTarget(appointment); setCancellationReason(""); }}>Yêu cầu hủy lịch</button>}
+                            </div>
                         </article>
                     ))}
                     </section>
@@ -286,6 +316,31 @@ function CustomerAppointments() {
                     </section>
                 </div>
             )}
+
+            {viewingAppointment && <div className="modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingAppointment(null); }}>
+                <section className="modal customer-modal" role="dialog" aria-modal="true" aria-labelledby="appointment-detail-title">
+                    <div className="modal-header"><div><h2 id="appointment-detail-title">Chi tiết lịch hẹn #{viewingAppointment.id}</h2><p>{viewingAppointment.service?.name || "Dịch vụ sửa chữa"}</p></div><button className="modal-close" type="button" aria-label="Đóng" onClick={() => setViewingAppointment(null)}>×</button></div>
+                    <div className="appointment-details-grid">
+                        <div><span>Trạng thái</span><strong>{statusLabel(viewingAppointment.status)}</strong></div>
+                        <div><span>Thời gian hẹn</span><strong>{formatAppointmentDate(viewingAppointment.appointmentDate)} · {viewingAppointment.appointmentTime.slice(0, 5)}</strong></div>
+                        <div><span>Thiết bị</span><strong>{viewingAppointment.device}</strong></div>
+                        <div><span>Hình thức</span><strong>{methodLabel(viewingAppointment.serviceMethod)}</strong></div>
+                        <div><span>Số điện thoại liên hệ</span><strong>{viewingAppointment.contactPhone}</strong></div>
+                        {viewingAppointment.technician && <div><span>Kỹ thuật viên phụ trách</span><strong>{viewingAppointment.technician.fullName} · {viewingAppointment.technician.employeeCode}</strong></div>}
+                        {viewingAppointment.pickupAddress && <div className="appointment-detail-full"><span>Địa chỉ nhận thiết bị</span><strong>{viewingAppointment.pickupAddress}</strong></div>}
+                        <div className="appointment-detail-full"><span>Mô tả tình trạng</span><strong>{viewingAppointment.problemDescription || "Không có mô tả"}</strong></div>
+                    </div>
+                    <div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => setViewingAppointment(null)}>Đóng</button></div>
+                </section>
+            </div>}
+
+            {cancellationTarget && <div className="modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setCancellationTarget(null); }}>
+                <form className="modal customer-modal" role="dialog" aria-modal="true" aria-labelledby="appointment-cancellation-title" onSubmit={handleCancellationRequest}>
+                    <div className="modal-header"><div><h2 id="appointment-cancellation-title">Yêu cầu hủy lịch #{cancellationTarget.id}</h2><p>{cancellationTarget.service?.name || "Dịch vụ sửa chữa"} · {cancellationTarget.device}</p></div><button className="modal-close" type="button" aria-label="Đóng" disabled={saving} onClick={() => setCancellationTarget(null)}>×</button></div>
+                    <div className="appointment-form-group"><label htmlFor="appointment-cancellation-reason">Lý do hủy</label><textarea id="appointment-cancellation-reason" required maxLength={1000} rows={4} value={cancellationReason} onChange={(event) => setCancellationReason(event.target.value)} /></div>
+                    <div className="appointment-search-actions"><button className="secondary-button" type="button" disabled={saving} onClick={() => setCancellationTarget(null)}>Quay lại</button><button className="danger-button" type="submit" disabled={saving}>{saving ? "Đang gửi..." : "Gửi yêu cầu"}</button></div>
+                </form>
+            </div>}
         </main>
     );
 }

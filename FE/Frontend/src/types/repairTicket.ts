@@ -19,10 +19,21 @@ export interface RepairTicketRequest {
 }
 
 export interface RepairHistoryEntry {
+    ticketId: number;
     ticketCode: string;
+    bookedService: string | null;
     device: string;
     service: string | null;
     completedDate: string | null;
     cost: number | null;
     status: string;
+}
+
+export interface RepairTicketActivity {
+    id: number;
+    action: string;
+    details: string | null;
+    note: string | null;
+    employeeName: string | null;
+    createdAt: string;
 }
