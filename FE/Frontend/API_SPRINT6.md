@@ -29,5 +29,6 @@ BE trả lỗi nghiệp vụ/validation theo JSON `{ "message": "..." }` với H
 ## Điểm chờ BE
 
 - `POST /api/appointments` hiện tạo lịch ở trạng thái `PENDING`, chưa tự chọn nhân viên hoặc tạo phiếu. Phân công chỉ diễn ra khi nhân viên/admin gọi `PATCH /api/appointments/{id}/assign`. FE vì vậy phản hồi đúng là “đã tiếp nhận yêu cầu”, chưa thể khẳng định lịch đã được phân công.
+- SecurityConfig hiện cấp quyền nhân viên cho `GET /api/appointments/assigned/me` nhưng chưa khai báo `GET /api/appointments/assigned/me/groups`; controller có route groups nhưng nhân viên có thể nhận 403. FE đã fallback sang route cũ và tự chia nhóm đến khi BE bổ sung quyền.
 - Chưa có API chuyển phiếu `Khách từ chối` sang trạng thái kết thúc riêng. `CUSTOMER_DECLINED` là trạng thái cuối; `PUT` không được đổi trạng thái và `PATCH /status` không cho phép chuyển từ trạng thái này. FE tạm khóa thao tác kết thúc để tránh gửi request chắc chắn thất bại.
 - Timeline hiện có mốc tiếp nhận, chẩn đoán, báo giá, quyết định báo giá và cập nhật trạng thái. BE chưa thêm mốc “đặt lịch” vào timeline phiếu.

@@ -1,4 +1,5 @@
 import axiosClient from "./axiosClient";
+import axios from "axios";
 import type {
     Appointment,
     AssignedAppointment,
@@ -29,8 +30,19 @@ export const getMyAssignedAppointmentsApi = async (): Promise<AssignedAppointmen
 };
 
 export const getMyAssignedAppointmentGroupsApi = async (): Promise<AssignedAppointmentGroups> => {
-    const response = await axiosClient.get<AssignedAppointmentGroups>("/api/appointments/assigned/me/groups");
-    return response.data;
+    try {
+        const response = await axiosClient.get<AssignedAppointmentGroups>("/api/appointments/assigned/me/groups");
+        return response.data;
+    } catch (error: unknown) {
+        // The route is present in AppointmentController, but some BE deployments
+        // still authorize only /assigned/me for employees. Keep the workflow usable.
+        if (!axios.isAxiosError(error) || error.response?.status !== 403) throw error;
+        const appointments = await getMyAssignedAppointmentsApi();
+        const actionRequired = appointments.filter((item) => ["PENDING", "CONFIRMED", "CANCELLATION_REQUESTED"].includes(item.status));
+        const received = appointments.filter((item) => item.status === "RECEIVED");
+        const other = appointments.filter((item) => !["PENDING", "CONFIRMED", "CANCELLATION_REQUESTED", "RECEIVED"].includes(item.status));
+        return { actionRequired, received, other };
+    }
 };
 
 export const getPendingAppointmentsApi = async (): Promise<AssignedAppointment[]> => {

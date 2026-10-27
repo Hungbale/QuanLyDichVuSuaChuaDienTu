@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import axios from "axios";
 import { checkAppointmentAvailabilityApi } from "../../api/appointmentApi";
 import type { AppointmentRequest } from "../../types/appointment";
 import type { ServiceItem } from "../../types/service";
@@ -35,10 +36,11 @@ function AppointmentForm({
             setAvailabilityError("");
             checkAppointmentAvailabilityApi(values.appointmentDate, values.appointmentTime)
                 .then((result) => { if (active) setAvailability(result); })
-                .catch((error: any) => {
+                .catch((error: unknown) => {
                     if (!active) return;
                     setAvailability(null);
-                    setAvailabilityError(error.response?.data?.message || "Chưa kiểm tra được khung giờ này.");
+                    const message = axios.isAxiosError<{ message?: string }>(error) ? error.response?.data?.message : undefined;
+                    setAvailabilityError(message || "Chưa kiểm tra được khung giờ này.");
                 })
                 .finally(() => { if (active) setCheckingAvailability(false); });
         }, 300);
