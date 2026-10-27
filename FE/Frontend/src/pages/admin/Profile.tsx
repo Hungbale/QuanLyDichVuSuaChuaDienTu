@@ -15,7 +15,7 @@ function AdminProfile() {
 
             <div className="dashboard-card">
                 <div className="form-group">
-                    <label>Email</label>
+                    <label>Địa chỉ thư điện tử</label>
 
                     <input
                         type="email"

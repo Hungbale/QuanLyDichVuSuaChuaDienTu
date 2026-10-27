@@ -17,6 +17,7 @@ function CustomerServices() {
     const [hasSearched, setHasSearched] = useState(false);
     const [error, setError] = useState("");
     const [categoryError, setCategoryError] = useState("");
+    const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
 
     useEffect(() => {
         let active = true;
@@ -148,6 +149,9 @@ function CustomerServices() {
                                     <span>Giá tham khảo</span>
                                     <strong>Từ {service.price.toLocaleString("vi-VN")} đ</strong>
                                 </div>
+                                <button className="service-details-button" type="button" onClick={() => setSelectedService(service)}>
+                                    Xem chi tiết
+                                </button>
                                 <Link className="service-book-link" to={`/customer/book-appointment?serviceId=${service.id}`}>
                                     <CalendarPlus size={17} /> Đặt lịch
                                 </Link>
@@ -244,15 +248,31 @@ function CustomerServices() {
                                 <p>{service.description || "Liên hệ FIXHUB để biết thêm thông tin về dịch vụ."}</p>
                                 <div className="service-catalog-card-footer">
                                     <strong>{service.price.toLocaleString("vi-VN")} đ</strong>
-                                    <Link to={`/customer/book-appointment?serviceId=${service.id}`} aria-label={`Đặt lịch ${service.name}`}>
-                                        Đặt lịch <ArrowRight size={16} />
-                                    </Link>
+                                    <div className="service-catalog-actions">
+                                        <button className="service-details-button" type="button" onClick={() => setSelectedService(service)}>Xem chi tiết</button>
+                                        <Link to={`/customer/book-appointment?serviceId=${service.id}`} aria-label={`Đặt lịch ${service.name}`}>
+                                            Đặt lịch <ArrowRight size={16} />
+                                        </Link>
+                                    </div>
                                 </div>
                             </article>
                         ))}
                     </div>
                 )}
             </section>
+            {selectedService && <div className="modal-overlay" onClick={() => setSelectedService(null)}>
+                <section className="modal customer-modal service-details-modal" role="dialog" aria-modal="true" aria-labelledby="customer-service-details-title" onClick={(event) => event.stopPropagation()}>
+                    <div className="modal-header"><h2 id="customer-service-details-title">Thông tin dịch vụ</h2><button className="modal-close" type="button" aria-label="Đóng" onClick={() => setSelectedService(null)}>×</button></div>
+                    <dl className="service-details-list">
+                        <div><dt>Mã dịch vụ</dt><dd>{selectedService.serviceCode}</dd></div>
+                        <div><dt>Tên dịch vụ</dt><dd>{selectedService.name}</dd></div>
+                        <div><dt>Danh mục</dt><dd>{selectedService.category.name}</dd></div>
+                        <div><dt>Giá tham khảo</dt><dd>{selectedService.price.toLocaleString("vi-VN")} đ</dd></div>
+                        <div className="service-details-description"><dt>Mô tả</dt><dd>{selectedService.description || "Dịch vụ sửa chữa được thực hiện bởi đội ngũ kỹ thuật viên FIXHUB."}</dd></div>
+                    </dl>
+                    <div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setSelectedService(null)}>Đóng</button><Link className="primary-button" to={`/customer/book-appointment?serviceId=${selectedService.id}`}>Đặt lịch dịch vụ</Link></div>
+                </section>
+            </div>}
         </main>
     );
 }

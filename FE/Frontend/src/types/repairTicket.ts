@@ -15,14 +15,26 @@ export interface RepairTicketRequest {
     device: string;
     receivedDate: string;
     status: string;
+    note?: string;
     technicianId?: number | null;
 }
 
 export interface RepairHistoryEntry {
+    ticketId: number;
     ticketCode: string;
+    bookedService: string | null;
     device: string;
     service: string | null;
     completedDate: string | null;
     cost: number | null;
     status: string;
+}
+
+export interface RepairTicketActivity {
+    id: number;
+    action: string;
+    details: string | null;
+    note: string | null;
+    employeeName: string | null;
+    createdAt: string;
 }
