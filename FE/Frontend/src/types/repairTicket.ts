@@ -15,6 +15,7 @@ export interface RepairTicketRequest {
     device: string;
     receivedDate: string;
     status: string;
+    note?: string;
     technicianId?: number | null;
 }
 

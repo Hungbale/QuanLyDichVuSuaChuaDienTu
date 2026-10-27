@@ -3138,6 +3138,26 @@ th {
     background: #f7f5fa;
 }
 
+.appointment-filter-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin: 0 0 18px;
+    color: #514d5b;
+    font-size: 14px;
+}
+
+.appointment-filter-row select {
+    min-width: 190px;
+    padding: 9px 12px;
+    border: 1px solid #ded8e9;
+    border-radius: 10px;
+    background: #fff;
+    color: #383345;
+    font: inherit;
+}
+
 .repair-management-tabs {
     display: flex;
     gap: 8px;

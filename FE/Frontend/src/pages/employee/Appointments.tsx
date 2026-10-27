@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { assignAppointmentApi, getAppointmentCancellationRequestsApi, getMyAssignedAppointmentGroupsApi, getPendingAppointmentsApi, reviewAppointmentCancellationApi } from "../../api/appointmentApi";
 import type { AppointmentCancellationRequestRecord, AssignedAppointment } from "../../types/appointment";
+import { statusLabel } from "../../utils/statusLabel";
 
 function EmployeeAppointments() {
     const navigate = useNavigate();
@@ -25,13 +26,15 @@ function EmployeeAppointments() {
                 getAppointmentCancellationRequestsApi(),
             ]);
             const normalizedPhone = contactPhone?.trim();
-            setAppointments(normalizedPhone
+            const newestFirst = (items: AssignedAppointment[]) => [...items].sort((a, b) =>
+                `${b.appointmentDate}T${b.appointmentTime}`.localeCompare(`${a.appointmentDate}T${a.appointmentTime}`) || b.id - a.id);
+            setAppointments(newestFirst(normalizedPhone
                 ? groups.actionRequired.filter((appointment) => appointment.contactPhone.includes(normalizedPhone))
-                : groups.actionRequired);
-            setReceivedAppointments(normalizedPhone
+                : groups.actionRequired));
+            setReceivedAppointments(newestFirst(normalizedPhone
                 ? groups.received.filter((appointment) => appointment.contactPhone.includes(normalizedPhone))
-                : groups.received);
-            setPendingAppointments(normalizedPhone ? pending.filter((appointment) => appointment.contactPhone.includes(normalizedPhone)) : pending);
+                : groups.received));
+            setPendingAppointments(newestFirst(normalizedPhone ? pending.filter((appointment) => appointment.contactPhone.includes(normalizedPhone)) : pending));
             setCancellationRequests(cancellations);
         } catch (requestError: any) {
             setError(requestError.response?.data?.message || "Không thể tải danh sách lịch hẹn.");
@@ -142,7 +145,7 @@ function EmployeeAppointments() {
                                     </td>
                                     <td>
                                         <span className={`appointment-status ${appointment.status.toLowerCase()}`}>
-                                            {appointment.status === "PENDING" ? "Chờ xác nhận" : appointment.status === "CANCELLED" ? "Đã hủy" : appointment.status}
+                                            {statusLabel(appointment.status)}
                                         </span>
                                     </td>
                                     <td className="appointment-description-cell">{appointment.problemDescription}</td>
@@ -170,7 +173,7 @@ function EmployeeAppointments() {
                     <div className="modal-header"><div><h2 id="employee-appointment-detail-title">Chi tiết lịch hẹn #{viewingAppointment.id}</h2><p>{viewingAppointment.serviceName}</p></div><button className="modal-close" type="button" aria-label="Đóng" onClick={() => setViewingAppointment(null)}>×</button></div>
                     <div className="appointment-details-grid">
                         <div><span>Khách hàng</span><strong>{viewingAppointment.customerName || "Khách vãng lai"}</strong></div>
-                        <div><span>Trạng thái</span><strong>{viewingAppointment.status === "CONFIRMED" ? "Đã xác nhận" : viewingAppointment.status}</strong></div>
+                        <div><span>Trạng thái</span><strong>{statusLabel(viewingAppointment.status)}</strong></div>
                         <div><span>Thời gian hẹn</span><strong>{new Date(`${viewingAppointment.appointmentDate}T00:00:00`).toLocaleDateString("vi-VN")} · {viewingAppointment.appointmentTime.slice(0, 5)}</strong></div>
                         <div><span>Thiết bị</span><strong>{viewingAppointment.device}</strong></div>
                         <div><span>Số điện thoại liên hệ</span><strong>{viewingAppointment.contactPhone}</strong></div>

@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import {
     changeCustomerStatusApi,
     createCustomerApi,
+    getCustomerByIdApi,
     getCustomersApi,
     updateCustomerApi,
 } from "../../api/customerApi";
@@ -28,6 +29,16 @@ function AdminCustomers() {
     const [showModal, setShowModal] = useState(false);
     const [editingCustomer, setEditingCustomer] =
         useState<Customer | null>(null);
+    const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+
+    const viewCustomer = async (customer: Customer) => {
+        setDetailLoading(true);
+        setError("");
+        try { setViewingCustomer(await getCustomerByIdApi(customer.id)); }
+        catch (error: any) { setError(error.response?.data?.message || "Không thể tải chi tiết khách hàng."); }
+        finally { setDetailLoading(false); }
+    };
 
     const [form, setForm] = useState<CustomerRequest>({
         customerCode: "",
@@ -158,12 +169,12 @@ function AdminCustomers() {
         }
 
         if (!form.email.trim()) {
-            setError("Email không được để trống.");
+            setError("Địa chỉ thư điện tử không được để trống.");
             return;
         }
 
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-            setError("Email không hợp lệ.");
+            setError("Địa chỉ thư điện tử không hợp lệ.");
             return;
         }
 
@@ -415,7 +426,7 @@ function AdminCustomers() {
                                 <th>ID</th>
                                 <th>Mã KH</th>
                                 <th>Họ tên</th>
-                                <th>Email</th>
+                                <th>Địa chỉ thư điện tử</th>
                                 <th>Số điện thoại</th>
                                 <th>Địa chỉ</th>
                                 <th>Số lần sửa</th>
@@ -490,6 +501,7 @@ function AdminCustomers() {
 
                                         <td>
                                             <div className="action-buttons">
+                                                <button className="secondary-button" type="button" onClick={() => void viewCustomer(customer)}>Chi tiết</button>
                                                 <button
                                                     className="secondary-button"
                                                     onClick={() =>
@@ -640,7 +652,7 @@ function AdminCustomers() {
                                 }}
                             >
                                 <label>
-                                    Email
+                                    Địa chỉ thư điện tử
                                 </label>
 
                                 <input
@@ -793,6 +805,8 @@ function AdminCustomers() {
                     </div>
                 </div>
             )}
+            {detailLoading && <div className="modal-overlay"><div className="modal customer-modal">Đang tải hồ sơ khách hàng...</div></div>}
+            {viewingCustomer && <div className="modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingCustomer(null); }}><section className="modal customer-modal" role="dialog" aria-modal="true" aria-labelledby="customer-detail-title"><div className="modal-header"><div><h2 id="customer-detail-title">Hồ sơ khách hàng</h2><p>{viewingCustomer.customerCode}</p></div><button className="modal-close" type="button" aria-label="Đóng" onClick={() => setViewingCustomer(null)}>×</button></div><div className="appointment-details-grid"><div><span>Họ tên</span><strong>{viewingCustomer.fullName}</strong></div><div><span>Địa chỉ thư điện tử</span><strong>{viewingCustomer.email || viewingCustomer.user?.email || "—"}</strong></div><div><span>Số điện thoại</span><strong>{viewingCustomer.phone}</strong></div><div><span>Trạng thái</span><strong>{viewingCustomer.status === "ACTIVE" ? "Đang hoạt động" : "Đã khóa"}</strong></div><div><span>Số lần sửa chữa</span><strong>{viewingCustomer.repairCount}</strong></div><div className="appointment-detail-full"><span>Địa chỉ</span><strong>{viewingCustomer.address || "—"}</strong></div></div><div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => setViewingCustomer(null)}>Đóng</button></div></section></div>}
         </div>
     );
 }

@@ -1,0 +1,53 @@
+const labels: Record<string, string> = {
+    ACTIVE: "Đang hoạt động",
+    INACTIVE: "Ngừng hoạt động",
+    LOCKED: "Đã khóa",
+    PENDING: "Chờ xác nhận",
+    CONFIRMED: "Đã xác nhận",
+    CANCELLATION_REQUESTED: "Chờ duyệt hủy",
+    CANCELLED: "Đã hủy",
+    SCHEDULED: "Chờ tiếp nhận",
+    RECEIVED: "Đã tiếp nhận",
+    IN_PROGRESS: "Đang xử lý",
+    DIAGNOSING: "Đang kiểm tra",
+    QUOTED: "Đã gửi báo giá",
+    SENT: "Chờ khách xác nhận",
+    ACCEPTED: "Đã xác nhận",
+    REJECTED: "Đã từ chối",
+    CUSTOMER_DECLINED: "Khách đã từ chối",
+    REPAIRING: "Đang sửa chữa",
+    WAITING_FOR_PARTS: "Chờ linh kiện",
+    CANNOT_BE_REPAIRED: "Không thể sửa",
+    COMPLETED: "Hoàn thành",
+    CONVERTED: "Đã chuyển sang phiếu sửa chữa",
+    PAID: "Đã thanh toán",
+    UNPAID: "Chưa thanh toán",
+    FAILED: "Thất bại",
+    REFUNDED: "Đã hoàn tiền",
+    CASH: "Tiền mặt",
+    BANK_TRANSFER: "Chuyển khoản",
+    APPROVED: "Đã duyệt",
+    DECLINED: "Đã từ chối",
+    PROCESSING: "Đang xử lý",
+    WAITING: "Đang chờ",
+    WAITING_FOR_CONFIRMATION: "Chờ xác nhận",
+    WAITING_FOR_PAYMENT: "Chờ thanh toán",
+    PAYMENT_PENDING: "Chờ thanh toán",
+    PAYMENT_FAILED: "Thanh toán thất bại",
+    PAYMENT_COMPLETED: "Đã thanh toán",
+    INACTIVE_STATUS: "Ngừng hoạt động",
+    ENABLED: "Đang bật",
+    DISABLED: "Đang tắt",
+    EXPIRED: "Đã hết hạn",
+    REFUSED: "Đã từ chối",
+    REFUND_PENDING: "Chờ hoàn tiền",
+    DRAFT: "Bản nháp",
+    ARCHIVED: "Đã lưu trữ",
+};
+
+export function statusLabel(value: string | null | undefined): string {
+    if (!value) return "Không xác định";
+    const normalized = value.trim().toUpperCase().replace(/[ -]+/g, "_");
+    if (labels[normalized]) return labels[normalized];
+    return /^[A-Z][A-Z0-9_]*$/.test(normalized) ? "Trạng thái khác" : value;
+}

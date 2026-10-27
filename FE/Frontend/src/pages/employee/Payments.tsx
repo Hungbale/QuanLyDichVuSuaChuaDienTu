@@ -15,6 +15,8 @@ function EmployeePayments() {
     const [confirmingId, setConfirmingId] = useState<number | null>(null);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+    const [activeTab, setActiveTab] = useState<"current" | "past">("current");
+    const [statusFilter, setStatusFilter] = useState("ALL");
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -44,15 +46,19 @@ function EmployeePayments() {
         finally { setConfirmingId(null); }
     };
 
-    const pending = records.filter(({ payment }) => payment.status === "PENDING");
     const paid = records.filter(({ payment }) => payment.status === "PAID");
+    const currentRecords = records.filter(({ payment }) => payment.status !== "PAID");
+    const pastRecords = paid;
+    const periodRecords = activeTab === "current" ? currentRecords : pastRecords;
+    const visibleRecords = periodRecords.filter(({ payment }) => statusFilter === "ALL" || payment.status === statusFilter);
 
     return <main className="management-page appointment-page">
         <header className="appointment-page-header"><span className="appointment-eyebrow">FIXHUB · NHÂN VIÊN</span><h1>Xác nhận thanh toán</h1><p>Đối chiếu tiền khách đã gửi hoặc nộp tại cửa hàng rồi xác nhận giao dịch.</p></header>
         {error && <div className="error-message" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}
-        <div className="appointment-results-heading"><div><h2>Đang chờ xác nhận</h2><p>{loading ? "Đang tải..." : `${pending.length} giao dịch`}</p></div></div>
-        {loading ? <div className="appointment-panel table-state">Đang tải thanh toán...</div> : pending.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>Không có giao dịch chờ xác nhận</h2><p>Các yêu cầu thanh toán của khách sẽ xuất hiện tại đây.</p></div> : <div className="appointment-panel appointment-table-container"><table className="appointment-table repair-ticket-table"><thead><tr><th>Mã phiếu</th><th>Khách hàng</th><th>Thiết bị</th><th>Số tiền</th><th>Hình thức</th><th>Ngày yêu cầu</th><th>Thao tác</th></tr></thead><tbody>{pending.map((record) => <tr key={record.payment.id}><td><strong>{record.payment.ticketCode}</strong></td><td>{record.ticket.customerName}</td><td>{record.ticket.device}</td><td><strong>{money(record.payment.amount)}</strong></td><td>{paymentMethod(record.payment.method)}</td><td>{new Date(record.payment.createdAt).toLocaleString("vi-VN")}</td><td><button className="primary-button" type="button" disabled={confirmingId === record.payment.id} onClick={() => void confirm(record)}>{confirmingId === record.payment.id ? "Đang xác nhận..." : "Đã nhận tiền · Xác nhận"}</button></td></tr>)}</tbody></table></div>}
-        {paid.length > 0 && <><div className="appointment-results-heading payment-paid-heading"><div><h2>Đã thanh toán</h2><p>{paid.length} giao dịch</p></div></div><div className="appointment-panel appointment-table-container"><table className="appointment-table repair-ticket-table"><thead><tr><th>Mã phiếu</th><th>Khách hàng</th><th>Thiết bị</th><th>Số tiền</th><th>Hình thức</th><th>Thời gian xác nhận</th><th>Trạng thái</th></tr></thead><tbody>{paid.map((record) => <tr key={record.payment.id}><td><strong>{record.payment.ticketCode}</strong></td><td>{record.ticket.customerName}</td><td>{record.ticket.device}</td><td>{money(record.payment.amount)}</td><td>{paymentMethod(record.payment.method)}</td><td>{record.payment.paidAt ? new Date(record.payment.paidAt).toLocaleString("vi-VN") : "—"}</td><td><span className="appointment-status completed">Đã thanh toán</span></td></tr>)}</tbody></table></div></>}
+        <div className="appointment-tabs" role="tablist" aria-label="Phân loại thanh toán nhân viên"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{currentRecords.length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{pastRecords.length}</span></button></div>
+        <div className="appointment-filter-row"><label htmlFor="employee-payment-status">Lọc trạng thái</label><select id="employee-payment-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option><option value="PENDING">Chờ xác nhận</option><option value="PAID">Đã thanh toán</option></select></div>
+        <div className="appointment-results-heading"><div><h2>Thanh toán {activeTab === "current" ? "hiện tại" : "đã qua"}</h2><p>{loading ? "Đang tải..." : `${visibleRecords.length} giao dịch`}</p></div></div>
+        {loading ? <div className="appointment-panel table-state">Đang tải thanh toán...</div> : visibleRecords.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>{activeTab === "current" ? "Không có giao dịch hiện tại" : "Chưa có giao dịch đã qua"}</h2><p>Giao dịch phù hợp sẽ xuất hiện tại đây.</p></div> : <div className="appointment-panel appointment-table-container"><table className="appointment-table repair-ticket-table"><thead><tr><th>Mã phiếu</th><th>Khách hàng</th><th>Thiết bị</th><th>Số tiền</th><th>Hình thức</th><th>Thời gian</th><th>Trạng thái / thao tác</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={record.payment.id}><td><strong>{record.payment.ticketCode}</strong></td><td>{record.ticket.customerName}</td><td>{record.ticket.device}</td><td><strong>{money(record.payment.amount)}</strong></td><td>{paymentMethod(record.payment.method)}</td><td>{new Date(record.payment.paidAt || record.payment.createdAt).toLocaleString("vi-VN")}</td><td>{record.payment.status === "PENDING" ? <button className="primary-button" type="button" disabled={confirmingId === record.payment.id} onClick={() => void confirm(record)}>{confirmingId === record.payment.id ? "Đang xác nhận..." : "Đã nhận tiền · Xác nhận"}</button> : <span className="appointment-status completed">Đã thanh toán</span>}</td></tr>)}</tbody></table></div>}
     </main>;
 }
 

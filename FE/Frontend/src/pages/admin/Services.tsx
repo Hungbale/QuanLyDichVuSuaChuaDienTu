@@ -5,6 +5,7 @@ import {
     changeCategoryStatusApi,
     createCategoryApi,
     deleteCategoryApi,
+    getCategoryByIdApi,
     getCategoriesApi,
     updateCategoryApi,
 } from "../../api/categoryApi";
@@ -61,10 +62,10 @@ function AdminServices() {
         useState<ServiceItem | null>(null);
 
     const [serviceForm, setServiceForm] =
-        useState<ServiceItemRequest>({
+        useState<Omit<ServiceItemRequest, "price"> & { price: string }>({
             name: "",
             categoryId: 0,
-            price: 0,
+            price: "",
             description: "",
         });
 
@@ -143,7 +144,7 @@ function AdminServices() {
         setServiceForm({
             name: "",
             categoryId: 0,
-            price: 0,
+            price: "",
             description: "",
         });
 
@@ -167,7 +168,7 @@ function AdminServices() {
         setServiceForm({
             name: service.name,
             categoryId: service.category.id,
-            price: service.price,
+            price: String(service.price),
             description: service.description || "",
         });
 
@@ -231,7 +232,7 @@ function AdminServices() {
             return;
         }
 
-        if (serviceForm.price < 0) {
+        if (Number(serviceForm.price) < 0) {
             setError("Giá dịch vụ không được âm.");
             return;
         }
@@ -369,16 +370,19 @@ function AdminServices() {
         setShowCategoryModal(true);
     };
 
-    const openEditCategoryModal = (
+    const openEditCategoryModal = async (
         category: Category
     ) => {
-        setEditingCategory(category);
-        setCategoryName(category.name);
-
         setError("");
         setSuccess("");
-
-        setShowCategoryModal(true);
+        try {
+            const latestCategory = await getCategoryByIdApi(category.id);
+            setEditingCategory(latestCategory);
+            setCategoryName(latestCategory.name);
+            setShowCategoryModal(true);
+        } catch (error: any) {
+            setError(error.response?.data?.message || "Không thể tải chi tiết danh mục.");
+        }
     };
 
     const closeCategoryModal = () => {
@@ -1171,6 +1175,8 @@ function AdminServices() {
                                 <input
                                     type="number"
                                     min="0"
+                                    step="any"
+                                    placeholder="Nhập giá dịch vụ"
                                     value={
                                         serviceForm.price
                                     }
@@ -1178,11 +1184,7 @@ function AdminServices() {
                                         setServiceForm(
                                             {
                                                 ...serviceForm,
-                                                price: Number(
-                                                    event
-                                                        .target
-                                                        .value
-                                                ),
+                                                price: event.target.value,
                                             }
                                         )
                                     }

@@ -4,6 +4,7 @@ import { getMyEmployeeProfileApi } from "../../api/employeeApi";
 import { createRepairQuoteApi } from "../../api/repairQuoteApi";
 import { getRepairTicketsApi } from "../../api/repairTicketApi";
 import { getServicesApi } from "../../api/serviceApi";
+import { statusLabel } from "../../utils/statusLabel";
 import type { RepairQuoteItemRequest } from "../../types/repairQuote";
 import type { RepairTicket } from "../../types/repairTicket";
 import type { ServiceItem } from "../../types/service";
@@ -29,11 +30,18 @@ function EmployeeQuotes() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+    const [activeTab, setActiveTab] = useState<"current" | "past">("current");
+    const [statusFilter, setStatusFilter] = useState("ALL");
 
-    const filteredTickets = tickets.filter((ticket) =>
+    const isPastTicket = (ticket: RepairTicket) => ["COMPLETED", "Hoàn thành", "Đã kết thúc", "CANCELLED", "Đã hủy", "CUSTOMER_DECLINED", "Khách từ chối", "Khách đã từ chối"].includes(ticket.status);
+    const currentTickets = tickets.filter((ticket) => !isPastTicket(ticket));
+    const pastTickets = tickets.filter(isPastTicket);
+    const periodTickets = activeTab === "current" ? currentTickets : pastTickets;
+    const filteredTickets = periodTickets.filter((ticket) => statusFilter === "ALL" || ticket.status === statusFilter).filter((ticket) =>
         [ticket.ticketCode, ticket.customerName, ticket.device, ticket.status]
             .some((value) => value?.toLocaleLowerCase("vi").includes(searchTerm.trim().toLocaleLowerCase("vi"))),
     );
+    const statusOptions = [...new Set(periodTickets.map((ticket) => ticket.status))];
     const firstQuoteReadyTicket = tickets.find((ticket) => quoteReady(ticket.status));
 
     const load = useCallback(async () => {
@@ -45,7 +53,8 @@ function EmployeeQuotes() {
                 getRepairTicketsApi(),
                 getServicesApi({ status: "ACTIVE" }),
             ]);
-            setTickets(ticketList.filter((ticket) => ticket.technicianId === profile.id));
+            setTickets(ticketList.filter((ticket) => ticket.technicianId === profile.id)
+                .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate) || b.id - a.id));
             setServices(serviceList);
         } catch (e: any) {
             setError(messageOf(e));
@@ -120,7 +129,10 @@ function EmployeeQuotes() {
                 <div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => setSearchTerm("")} disabled={!searchTerm}>Xóa tìm kiếm</button></div>
             </form>
 
-            <div className="appointment-results-heading"><div><h2>Phiếu được phân công cho tôi</h2><p>{loading ? "Đang tải..." : `${filteredTickets.length} phiếu`}</p></div></div>
+            <div className="appointment-tabs" role="tablist" aria-label="Phân loại phiếu báo giá"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{currentTickets.length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{pastTickets.length}</span></button></div>
+            <div className="appointment-filter-row"><label htmlFor="employee-quote-status">Lọc trạng thái</label><select id="employee-quote-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{statusOptions.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
+
+            <div className="appointment-results-heading"><div><h2>Phiếu {activeTab === "current" ? "hiện tại" : "đã qua"}</h2><p>{loading ? "Đang tải..." : `${filteredTickets.length} phiếu`}</p></div></div>
             {loading ? <div className="appointment-panel table-state">Đang tải phiếu sửa chữa...</div> : tickets.length === 0 ? (
                 <div className="appointment-panel appointment-empty-state"><h2>Chưa có phiếu được phân công cho bạn</h2></div>
             ) : filteredTickets.length === 0 ? (
@@ -135,11 +147,11 @@ function EmployeeQuotes() {
                                 <td>{ticket.customerName}</td>
                                 <td>{ticket.device}</td>
                                 <td>{new Date(`${ticket.receivedDate}T00:00:00`).toLocaleDateString("vi-VN")}</td>
-                                <td><span className="appointment-status">{ticket.status === "Đã kết thúc" ? "Đã kết thúc" : ticket.status === "Khách từ chối" || ticket.status === "Khách đã từ chối" ? "Khách đã từ chối" : quoteWaiting(ticket.status) ? "Chờ khách xác nhận" : ticket.status}</span></td>
+                                <td><span className="appointment-status">{ticket.status === "Đã kết thúc" ? "Đã kết thúc" : ticket.status === "Khách từ chối" || ticket.status === "Khách đã từ chối" ? "Khách đã từ chối" : quoteWaiting(ticket.status) ? "Chờ khách xác nhận" : statusLabel(ticket.status)}</span></td>
                                 <td>
                                     {quoteReady(ticket.status) ? <button className="primary-button" type="button" onClick={() => { setSelected(ticket); setItems([emptyItem()]); setError(""); }}>Lập báo giá</button>
                                         : quoteWaiting(ticket.status) ? <span>Đã gửi · chờ khách xác nhận</span>
-                                            : ticket.status === "Khách từ chối" || ticket.status === "Khách đã từ chối" ? <div className="repair-ticket-actions"><button className="primary-button" type="button" disabled title="Backend hiện chưa hỗ trợ API kết thúc phiếu khách từ chối báo giá.">Chờ API kết thúc phiếu</button></div>
+                                            : ticket.status === "Khách từ chối" || ticket.status === "Khách đã từ chối" ? <div className="repair-ticket-actions"><button className="primary-button" type="button" disabled title="Máy chủ hiện chưa hỗ trợ thao tác kết thúc phiếu khách từ chối báo giá.">Chờ bổ sung chức năng kết thúc phiếu</button></div>
                                                 : ticket.status === "Đã kết thúc" ? <span>Đã kết thúc</span>
                                                     : ticket.status === "Đang sửa" ? <span>Khách đã xác nhận</span>
                                                         : <span>Chờ kiểm tra</span>}

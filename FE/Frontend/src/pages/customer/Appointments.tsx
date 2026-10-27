@@ -35,10 +35,16 @@ function statusLabel(status: string) {
     return status;
 }
 
-type AppointmentTab = "current" | "past" | "cancelled";
+type AppointmentTab = "current" | "past";
 
 function appointmentTimestamp(appointment: Appointment) {
     return new Date(`${appointment.appointmentDate}T${appointment.appointmentTime}`).getTime();
+}
+
+function isPastAppointment(appointment: Appointment, now: number) {
+    const status = appointment.status.toUpperCase();
+    const hasBeenReceived = ["RECEIVED", "IN_PROGRESS", "CONVERTED", "COMPLETED"].includes(status);
+    return status === "CANCELLED" || hasBeenReceived || appointmentTimestamp(appointment) < now;
 }
 
 function CustomerAppointments() {
@@ -56,29 +62,28 @@ function CustomerAppointments() {
     const [cancellationTarget, setCancellationTarget] = useState<Appointment | null>(null);
     const [cancellationReason, setCancellationReason] = useState("");
     const [activeTab, setActiveTab] = useState<AppointmentTab>("current");
+    const [statusFilter, setStatusFilter] = useState("ALL");
 
     const groupedAppointments = useMemo(() => {
         const now = Date.now();
         const current: Appointment[] = [];
         const past: Appointment[] = [];
-        const cancelled: Appointment[] = [];
-
         appointments.forEach((appointment) => {
-            if (appointment.status === "CANCELLED") {
-                cancelled.push(appointment);
-            } else if (appointmentTimestamp(appointment) < now) {
+            if (isPastAppointment(appointment, now)) {
                 past.push(appointment);
             } else {
                 current.push(appointment);
             }
         });
 
-        past.sort((a, b) => appointmentTimestamp(b) - appointmentTimestamp(a));
-        cancelled.sort((a, b) => appointmentTimestamp(b) - appointmentTimestamp(a));
-        return { current, past, cancelled };
+        current.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        past.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        return { current, past };
     }, [appointments]);
 
-    const visibleAppointments = groupedAppointments[activeTab];
+    const periodAppointments = groupedAppointments[activeTab];
+    const availableStatuses = [...new Set(periodAppointments.map((appointment) => appointment.status))];
+    const visibleAppointments = periodAppointments.filter((appointment) => statusFilter === "ALL" || appointment.status === statusFilter);
 
     const loadAppointments = async () => {
         setLoading(true);
@@ -141,7 +146,7 @@ function CustomerAppointments() {
         try {
             await cancelAppointmentApi(appointment.id);
             setSuccess("Đã hủy lịch hẹn.");
-            setActiveTab("cancelled");
+            setActiveTab("past");
             await loadAppointments();
         } catch (requestError: any) {
             setError(requestError.response?.data?.message || "Không thể hủy lịch hẹn.");
@@ -218,7 +223,7 @@ function CustomerAppointments() {
                             role="tab"
                             aria-selected={activeTab === "current"}
                             aria-controls="appointments-tab-panel"
-                            onClick={() => setActiveTab("current")}
+                            onClick={() => { setActiveTab("current"); setStatusFilter("ALL"); }}
                         >
                             Hiện tại <span>{groupedAppointments.current.length}</span>
                         </button>
@@ -229,30 +234,20 @@ function CustomerAppointments() {
                             role="tab"
                             aria-selected={activeTab === "past"}
                             aria-controls="appointments-tab-panel"
-                            onClick={() => setActiveTab("past")}
+                            onClick={() => { setActiveTab("past"); setStatusFilter("ALL"); }}
                         >
                             Đã qua <span>{groupedAppointments.past.length}</span>
-                        </button>
-                        <button
-                            id="appointments-cancelled-tab"
-                            className={activeTab === "cancelled" ? "appointment-tab active" : "appointment-tab"}
-                            type="button"
-                            role="tab"
-                            aria-selected={activeTab === "cancelled"}
-                            aria-controls="appointments-tab-panel"
-                            onClick={() => setActiveTab("cancelled")}
-                        >
-                            Đã hủy <span>{groupedAppointments.cancelled.length}</span>
                         </button>
                     </div>
 
                     <section className="appointment-tab-panel" id="appointments-tab-panel" role="tabpanel" aria-labelledby={`appointments-${activeTab}-tab`}>
+                    <div className="appointment-filter-row"><label htmlFor="appointment-status-filter">Lọc trạng thái</label><select id="appointment-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{availableStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
                     {visibleAppointments.length === 0 ? (
                         <div className="appointment-panel appointment-empty-state">
-                            <h2>{activeTab === "current" ? "Bạn chưa có lịch hẹn hiện tại" : activeTab === "past" ? "Chưa có lịch hẹn đã qua" : "Chưa có lịch hẹn đã hủy"}</h2>
+                            <h2>{activeTab === "current" ? "Bạn chưa có lịch hẹn hiện tại" : "Chưa có lịch hẹn đã qua"}</h2>
                             <p>{activeTab === "current" ? "Xem danh sách dịch vụ để chọn dịch vụ và đặt lịch sửa chữa." : "Các lịch hẹn thuộc mục này sẽ xuất hiện tại đây."}</p>
                             {activeTab === "current" && (
-                                <button className="primary-button" onClick={() => navigate("/customer/services")}>
+                                <button className="primary-button" type="button" onClick={() => navigate("/customer/services")}>
                                     Xem dịch vụ
                                 </button>
                             )}

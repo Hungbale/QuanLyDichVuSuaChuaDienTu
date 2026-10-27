@@ -23,6 +23,8 @@ function Payment() {
     const [savingId, setSavingId] = useState<number | null>(null);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+    const [activeTab, setActiveTab] = useState<"current" | "past">("current");
+    const [statusFilter, setStatusFilter] = useState("ALL");
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -43,12 +45,20 @@ function Payment() {
                     throw e;
                 }
             }));
-            setItems(resolved.filter((item): item is PaymentItem => item !== null));
+            setItems(resolved.filter((item): item is PaymentItem => item !== null)
+                .sort((a, b) => (b.payments[0]?.createdAt || b.quote.createdAt).localeCompare(a.payments[0]?.createdAt || a.quote.createdAt)));
         } catch (e: any) { setError(messageOf(e)); }
         finally { setLoading(false); }
     }, []);
 
     useEffect(() => { void load(); }, [load]);
+
+    const paymentState = (item: PaymentItem) => item.payments.some((entry) => entry.status === "PAID")
+        ? "PAID" : item.payments.length ? "PENDING" : "UNPAID";
+    const currentItems = items.filter((item) => paymentState(item) !== "PAID");
+    const pastItems = items.filter((item) => paymentState(item) === "PAID");
+    const periodItems = activeTab === "current" ? currentItems : pastItems;
+    const visibleItems = periodItems.filter((item) => statusFilter === "ALL" || paymentState(item) === statusFilter);
 
     const createPayment = async (item: PaymentItem) => {
         const method = methods[item.quote.repairTicketId] || "BANK_TRANSFER";
@@ -66,8 +76,10 @@ function Payment() {
     return <main className="management-page appointment-page">
         <header className="appointment-page-header"><span className="appointment-eyebrow">FIXHUB · KHÁCH HÀNG</span><h1>Thanh toán</h1><p>Thanh toán các báo giá đã được bạn xác nhận và theo dõi trạng thái giao dịch.</p></header>
         {error && <div className="error-message" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}
-        <div className="appointment-results-heading"><div><h2>Báo giá có thể thanh toán</h2><p>{loading ? "Đang tải..." : `${items.length} khoản thanh toán`}</p></div></div>
-        {loading ? <div className="appointment-panel table-state">Đang tải thông tin thanh toán...</div> : items.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>Chưa có khoản thanh toán</h2><p>Khoản thanh toán sẽ xuất hiện sau khi bạn xác nhận báo giá sửa chữa.</p></div> : <div className="payment-list">{items.map((item) => {
+        <div className="appointment-tabs" role="tablist" aria-label="Phân loại thanh toán"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{currentItems.length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{pastItems.length}</span></button></div>
+        <div className="appointment-filter-row"><label htmlFor="payment-status-filter">Lọc trạng thái</label><select id="payment-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option><option value="UNPAID">Chưa tạo yêu cầu</option><option value="PENDING">Chờ xác nhận</option><option value="PAID">Đã thanh toán</option></select></div>
+        <div className="appointment-results-heading"><div><h2>{activeTab === "current" ? "Khoản thanh toán hiện tại" : "Khoản thanh toán đã qua"}</h2><p>{loading ? "Đang tải..." : `${visibleItems.length} khoản thanh toán`}</p></div></div>
+        {loading ? <div className="appointment-panel table-state">Đang tải thông tin thanh toán...</div> : visibleItems.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>{activeTab === "current" ? "Không có khoản thanh toán hiện tại" : "Chưa có khoản thanh toán đã qua"}</h2><p>Khoản thanh toán tương ứng sẽ xuất hiện tại đây.</p></div> : <div className="payment-list">{visibleItems.map((item) => {
             const payment = item.payments.find((entry) => entry.status === "PAID") || item.payments[0];
             const hasPaid = payment?.status === "PAID";
             return <article className="appointment-panel payment-card" key={item.quote.id}>

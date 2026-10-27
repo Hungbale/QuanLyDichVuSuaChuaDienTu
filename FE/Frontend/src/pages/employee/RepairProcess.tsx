@@ -61,11 +61,21 @@ function EmployeeRepairProcess() {
     const paymentConfirmed = editingTicket != null && (paymentsByTicket[editingTicket.id] || []).some((payment) => payment.status === "PAID");
     const requestedTicketIsActive = !requestedTicketId || activeTickets.some((ticket) => ticket.id === requestedTicketId);
 
-    const openUpdate = (ticket: RepairTicket) => {
+    const openUpdate = async (ticket: RepairTicket) => {
         setEditingTicket(ticket);
         setProgressNote("");
         setEvidencePhoto(null);
         setError("");
+        try {
+            const payments = await getRepairPaymentsApi(ticket.id);
+            setPaymentsByTicket((current) => ({ ...current, [ticket.id]: payments }));
+        } catch (requestError: any) {
+            if (requestError.response?.status === 404) {
+                setPaymentsByTicket((current) => ({ ...current, [ticket.id]: [] }));
+            } else {
+                setError(messageOf(requestError));
+            }
+        }
     };
 
     useEffect(() => {
@@ -98,14 +108,17 @@ function EmployeeRepairProcess() {
 
     const finishRepair = async () => {
         if (!editingTicket || !validateUpdate()) return;
-        if (!paymentConfirmed) {
-            setError("Chỉ có thể hoàn thành sau khi nhân viên đã xác nhận thanh toán ở mục Thanh toán.");
-            return;
-        }
         setSavingId(editingTicket.id);
         setError("");
         setNotice("");
         try {
+            // Refresh payment state in case it was confirmed in another page while this modal stayed open.
+            const latestPayments = await getRepairPaymentsApi(editingTicket.id);
+            setPaymentsByTicket((current) => ({ ...current, [editingTicket.id]: latestPayments }));
+            if (!latestPayments.some((payment) => payment.status === "PAID")) {
+                setError("Chưa thể hoàn thành: cần xác nhận khách đã thanh toán tại mục Thanh toán trước.");
+                return;
+            }
             await updateRepairTicketStatusApi(editingTicket.id, "COMPLETED", [evidencePhoto!], progressNote.trim());
             setNotice(`Đã hoàn thành sửa chữa phiếu ${editingTicket.ticketCode}.`);
             closeUpdate();
@@ -167,7 +180,7 @@ function EmployeeRepairProcess() {
                 <div className="appointment-form-group"><label htmlFor="repair-progress-note">Thông tin sửa chữa</label><textarea id="repair-progress-note" required maxLength={2000} rows={5} value={progressNote} onChange={(event) => setProgressNote(event.target.value)} placeholder="Mô tả hạng mục đã thực hiện, linh kiện đã thay hoặc kết quả kiểm tra..." /></div>
                 <div className="appointment-form-group"><label htmlFor="repair-progress-photo">Ảnh bằng chứng</label><input id="repair-progress-photo" type="file" accept="image/jpeg,image/png" onChange={(event) => setEvidencePhoto(event.target.files?.[0] || null)} /><small>Bắt buộc tải ảnh JPEG hoặc PNG, tối đa 5 MB.</small></div>
                 {!paymentConfirmed && <p className="tracking-timestamp-note">Chưa xác nhận thanh toán. Xác nhận giao dịch tại mục Thanh toán rồi quay lại hoàn tất phiếu.</p>}
-                <div className="repair-progress-modal-actions"><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={closeUpdate}>Hủy</button><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={() => void saveProgress()}>{savingId === editingTicket.id ? "Đang lưu..." : "Lưu tiến độ"}</button><button className="primary-button" type="button" disabled={savingId === editingTicket.id || !paymentConfirmed} onClick={() => void finishRepair()}>{savingId === editingTicket.id ? "Đang lưu..." : "Hoàn thành sửa chữa"}</button></div>
+                <div className="repair-progress-modal-actions"><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={closeUpdate}>Hủy</button><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={() => void saveProgress()}>{savingId === editingTicket.id ? "Đang lưu..." : "Lưu tiến độ"}</button><button className="primary-button" type="button" disabled={savingId === editingTicket.id} onClick={() => void finishRepair()}>{savingId === editingTicket.id ? "Đang lưu..." : "Hoàn thành sửa chữa"}</button></div>
             </section>
         </div>}
     </main>;

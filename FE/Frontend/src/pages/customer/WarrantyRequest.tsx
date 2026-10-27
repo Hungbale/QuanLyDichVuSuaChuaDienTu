@@ -12,7 +12,7 @@ function WarrantyRequest() {
                 <div className="table-state">
                     <h3>Yêu cầu bảo hành</h3>
                     <p>
-                        Chức năng đang chờ API bảo hành từ backend.
+                        Chức năng đang chờ máy chủ cung cấp dịch vụ bảo hành.
                     </p>
                 </div>
             </div>

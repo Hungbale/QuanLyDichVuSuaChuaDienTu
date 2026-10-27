@@ -7,6 +7,8 @@ import type { RepairPayment } from "../../types/repairPayment";
 import type { RepairQuote } from "../../types/repairQuote";
 import type { RepairHistoryEntry } from "../../types/repairTicket";
 import type { RepairTrackingDetails } from "../../types/repairTracking";
+import { statusLabel } from "../../utils/statusLabel";
+import { repairTrackingTitle } from "../../utils/repairTrackingTitle";
 
 type TimelineEvent = {
     id: string;
@@ -32,7 +34,7 @@ const statusTitle = (status: string) => ({
     "Khách đã từ chối": "Khách từ chối báo giá",
     "Đã kết thúc": "Kết thúc phiếu",
     "Hoàn thành": "Hoàn thành sửa chữa",
-}[status] || status);
+}[status] || statusLabel(status));
 
 function normalize(value: string | null | undefined) {
     return (value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi").trim();
@@ -41,6 +43,8 @@ function normalize(value: string | null | undefined) {
 function RepairTracking() {
     const [items, setItems] = useState<RepairHistoryEntry[]>([]);
     const [search, setSearch] = useState("");
+    const [activeTab, setActiveTab] = useState<"current" | "past">("current");
+    const [statusFilter, setStatusFilter] = useState("ALL");
     const [selected, setSelected] = useState<RepairHistoryEntry | null>(null);
     const [tracking, setTracking] = useState<RepairTrackingDetails | null>(null);
     const [quote, setQuote] = useState<RepairQuote | null>(null);
@@ -57,12 +61,20 @@ function RepairTracking() {
             .finally(() => setLoading(false));
     }, []);
 
+    const periodItems = useMemo(() => {
+        const isPast = (item: RepairHistoryEntry) => Boolean(item.completedDate)
+            || ["Hoàn thành", "Đã kết thúc", "Đã hủy", "Khách từ chối", "Khách đã từ chối", "COMPLETED", "CANCELLED", "CUSTOMER_DECLINED"].includes(item.status);
+        return items.filter((item) => activeTab === "past" ? isPast(item) : !isPast(item))
+            .sort((a, b) => (b.completedDate || b.ticketCode).localeCompare(a.completedDate || a.ticketCode));
+    }, [items, activeTab]);
+
     const filteredItems = useMemo(() => {
         const term = normalize(search);
-        if (!term) return items;
-        return items.filter((item) => [item.ticketCode, item.device, item.service, item.bookedService, item.status]
-            .some((value) => normalize(value).includes(term)));
-    }, [items, search]);
+        return periodItems.filter((item) => (statusFilter === "ALL" || item.status === statusFilter)
+            && (!term || [item.ticketCode, item.device, item.service, item.bookedService, item.status]
+                .some((value) => normalize(value).includes(term))));
+    }, [periodItems, search, statusFilter]);
+    const availableStatuses = [...new Set(periodItems.map((item) => item.status))];
 
     const closeDetails = () => {
         setSelected(null);
@@ -105,7 +117,7 @@ function RepairTracking() {
                 );
                 return {
                     id: `${event.type}-${index}`,
-                    title: event.title,
+                    title: repairTrackingTitle(event.type, event.details),
                     date: event.createdAt,
                     description: [event.details, event.note].filter(Boolean).join("\n"),
                     actor: event.actorName,
@@ -163,14 +175,16 @@ function RepairTracking() {
             <div className="appointment-form-group"><label htmlFor="repair-tracking-search">Tìm phiếu sửa chữa</label><input id="repair-tracking-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã phiếu, thiết bị, dịch vụ hoặc trạng thái" /></div>
             <div className="appointment-search-actions"><button className="secondary-button" type="button" disabled={!search} onClick={() => setSearch("")}>Xóa tìm kiếm</button></div>
         </form>
+        <div className="appointment-tabs" role="tablist" aria-label="Phân loại tiến độ sửa chữa"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{items.filter((item) => !item.completedDate && !["Hoàn thành", "Đã kết thúc", "Đã hủy", "Khách từ chối", "Khách đã từ chối", "COMPLETED", "CANCELLED", "CUSTOMER_DECLINED"].includes(item.status)).length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{items.length - items.filter((item) => !item.completedDate && !["Hoàn thành", "Đã kết thúc", "Đã hủy", "Khách từ chối", "Khách đã từ chối", "COMPLETED", "CANCELLED", "CUSTOMER_DECLINED"].includes(item.status)).length}</span></button></div>
+        <div className="appointment-filter-row"><label htmlFor="tracking-status-filter">Lọc trạng thái</label><select id="tracking-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{availableStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
         <div className="appointment-results-heading"><div><h2>Phiếu sửa chữa của tôi</h2><p>{loading ? "Đang tải..." : `${filteredItems.length} phiếu`}</p></div></div>
         {loading ? <div className="appointment-panel table-state">Đang tải tiến trình sửa chữa...</div> : items.length === 0 ? (
             <div className="appointment-panel appointment-empty-state"><h2>Chưa có phiếu sửa chữa</h2><p>Phiếu sẽ xuất hiện tại đây khi thiết bị được tiếp nhận.</p></div>
         ) : filteredItems.length === 0 ? (
-            <div className="appointment-panel appointment-empty-state"><h2>Không tìm thấy phiếu phù hợp</h2><p>Thử tìm bằng mã phiếu, thiết bị, dịch vụ hoặc trạng thái khác.</p></div>
+            <div className="appointment-panel appointment-empty-state"><h2>Không tìm thấy phiếu phù hợp</h2><p>Thử đổi từ khóa hoặc trạng thái lọc.</p></div>
         ) : (
             <div className="repair-progress-list">{filteredItems.map((item) => <article className="appointment-panel repair-progress-card" key={item.ticketId}>
-                <div className="appointment-card-top"><div><span className="appointment-card-reference">{item.ticketCode}</span><h2>{item.device}</h2></div><span className="appointment-status">{item.status}</span></div>
+                <div className="appointment-card-top"><div><span className="appointment-card-reference">{item.ticketCode}</span><h2>{item.device}</h2></div><span className="appointment-status">{statusLabel(item.status)}</span></div>
                 <div className="appointment-details-grid"><div><span>Dịch vụ / hạng mục</span><strong>{item.service || item.bookedService || "Đang chờ kiểm tra và báo giá"}</strong></div><div><span>Ngày hoàn tất</span><strong>{item.completedDate ? new Date(`${item.completedDate}T00:00:00`).toLocaleDateString("vi-VN") : "Chưa hoàn thành"}</strong></div></div>
                 <div className="appointment-search-actions"><button className="primary-button" type="button" onClick={() => void showDetails(item)}>Xem chi tiết tiến độ</button></div>
             </article>)}</div>
@@ -181,11 +195,11 @@ function RepairTracking() {
                 <div className="appointment-card-top"><div><span className="appointment-card-reference">{selected.ticketCode}</span><h2 id="tracking-detail-title">Tiến độ sửa chữa</h2><p>{selected.device}</p></div><button className="secondary-button" type="button" onClick={closeDetails}>Đóng</button></div>
                 {error && <div className="error-message" role="alert">{error}</div>}
                 {detailLoading ? <div className="table-state">Đang tải các mốc tiến độ...</div> : <>
-                    <div className="appointment-details-grid tracking-summary"><div><span>Trạng thái hiện tại</span><strong>{tracking?.currentStatus || selected.status}</strong></div><div><span>Phản hồi báo giá</span><strong>{quoteDecisionLabel}</strong></div><div><span>Dịch vụ</span><strong>{quote?.items.map((line) => line.name).join(", ") || selected.bookedService || selected.service || "Chưa có thông tin"}</strong></div></div>
+                    <div className="appointment-details-grid tracking-summary"><div><span>Trạng thái hiện tại</span><strong>{statusLabel(tracking?.currentStatus || selected.status)}</strong></div><div><span>Phản hồi báo giá</span><strong>{quoteDecisionLabel}</strong></div><div><span>Dịch vụ</span><strong>{quote?.items.map((line) => line.name).join(", ") || selected.bookedService || selected.service || "Chưa có thông tin"}</strong></div></div>
                     {timeline.length === 0 ? <div className="appointment-empty-state"><p>Chưa có mốc tiến độ được ghi nhận.</p></div> : <ol className="repair-timeline">{timeline.map((event) => <li className="repair-timeline-event" key={event.id}>
                         <span className="repair-timeline-marker" aria-hidden="true" />
                         <div className="repair-timeline-content"><div className="repair-timeline-heading"><h3>{event.title}</h3><time>{event.date ? formatDateTime(event.date) : "Chưa có thời điểm"}</time></div>
-                            {event.description && <p>{event.description}</p>}{event.actor && <small>Thực hiện bởi: {event.actor}</small>}
+                            {event.description?.split(/\r?\n/).map((line, index) => line.trim() ? <p key={`${event.id}-detail-${index}`}>{line.trim()}</p> : null)}{event.actor && <small>Thực hiện bởi: {event.actor}</small>}
                             {event.photos && event.photos.length > 0 && <div className="repair-timeline-photos">{event.photos.map((photo, index) => <button className="repair-timeline-photo-button" type="button" key={`${photo.fileName}-${index}`} onClick={() => setPreviewPhoto(photo)} aria-label={`Xem ảnh bằng chứng ${event.title}`}><img src={photo.dataUri} alt={`Bằng chứng ${event.title}`} loading="lazy" /></button>)}</div>}
                         </div>
                     </li>)}</ol>}
