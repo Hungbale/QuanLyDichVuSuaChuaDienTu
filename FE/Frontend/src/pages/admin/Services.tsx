@@ -302,7 +302,8 @@ function AdminServices() {
             setSuccess("");
 
             await changeServiceStatusApi(
-                service.id
+                service.id,
+                service.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"
             );
 
             setSuccess(
@@ -473,8 +474,19 @@ function AdminServices() {
             setError("");
             setSuccess("");
 
+            const nextStatus = category.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+            if (nextStatus === "INACTIVE") {
+                const categoryServices = await getServicesApi({ categoryId: category.id });
+                await Promise.all(
+                    categoryServices
+                        .filter((service) => service.status === "ACTIVE")
+                        .map((service) => changeServiceStatusApi(service.id, "INACTIVE"))
+                );
+            }
+
             await changeCategoryStatusApi(
-                category.id
+                category.id,
+                nextStatus
             );
 
             setSuccess(
