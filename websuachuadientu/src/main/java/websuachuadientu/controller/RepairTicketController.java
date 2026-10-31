@@ -22,6 +22,9 @@ import websuachuadientu.service.RepairIntakeService;
 import websuachuadientu.dto.RepairDiagnosisRequest;
 import websuachuadientu.dto.RepairDiagnosisResponse;
 import websuachuadientu.service.RepairDiagnosisService;
+import websuachuadientu.service.RepairFinalInspectionService;
+import websuachuadientu.dto.RepairFinalInspectionRequest;
+import websuachuadientu.dto.RepairFinalInspectionResponse;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -36,6 +39,7 @@ public class RepairTicketController {
     private final RepairTrackingService trackingService;
     private final RepairIntakeService intakeService;
     private final RepairDiagnosisService diagnosisService;
+    private final RepairFinalInspectionService finalInspectionService;
 
     @GetMapping
     public ResponseEntity<List<RepairTicketResponse>> search(
@@ -109,6 +113,22 @@ public class RepairTicketController {
     public ResponseEntity<RepairDiagnosisResponse> getDiagnosis(
             @PathVariable Long id, Authentication authentication) {
         return ResponseEntity.ok(diagnosisService.get(
+                id, authentication.getName(), isAdmin(authentication)));
+    }
+
+    @PostMapping("/{id}/final-inspection")
+    public ResponseEntity<RepairFinalInspectionResponse> saveFinalInspection(
+            @PathVariable Long id,
+            @Valid @RequestBody RepairFinalInspectionRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(finalInspectionService.save(
+                id, request, authentication.getName(), isAdmin(authentication)));
+    }
+
+    @GetMapping("/{id}/final-inspection")
+    public ResponseEntity<RepairFinalInspectionResponse> getFinalInspection(
+            @PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(finalInspectionService.get(
                 id, authentication.getName(), isAdmin(authentication)));
     }
 
