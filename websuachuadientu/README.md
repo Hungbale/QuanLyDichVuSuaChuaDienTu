@@ -1,189 +1,93 @@
-# Tài liệu các API đã cập nhật
+# API kiểm tra và hoàn thành sửa chữa
 
-## Quy ước chung
+Tài liệu này chỉ mô tả luồng nhân viên kiểm tra thiết bị sau sửa chữa, lưu kết quả và hoàn thành phiếu.
 
-- Các endpoint bên dưới có tiền tố `/api`.
-- Gửi token trong header: `Authorization: Bearer <token>`.
-- `{id}`, `{ticketId}` và `{quoteId}` là ID tương ứng trong hệ thống.
-- Ngày giờ trong JSON dùng định dạng ISO của Java, ví dụ `2026-10-26` và `14:30:00`.
+## Quyền truy cập và điều kiện
 
-## 1. Lịch hẹn được giao cho nhân viên, chia theo nhóm
+- Người gọi API phải đăng nhập bằng Bearer token.
+- Kỹ thuật viên được giao phiếu hoặc admin mới được lưu/đọc checklist.
+- Phiếu phải đang ở trạng thái `REPAIRING` hoặc `IN_PROGRESS`.
+- Để hoàn thành phiếu, cả ba mục kiểm tra phải đạt và phải có thông tin hoàn thành.
 
-### `GET /api/appointments/assigned/me/groups`
+## Lưu kết quả kiểm tra hoặc hoàn tất phiếu
 
-**Ai dùng:** Nhân viên đã đăng nhập.
+### `POST /api/repair-tickets/{id}/final-inspection`
 
-**Dùng để:** Lấy lịch được giao cho nhân viên hiện tại, chia nhóm để giao diện hiển thị lịch cần xử lý và lịch đã tiếp nhận. Lịch chờ xác nhận vẫn được trả về.
+**Mục đích:** Lưu checklist kiểm tra cuối. Endpoint này phục vụ cả hai nút trên màn hình:
 
-**Đầu vào:** Không có query parameter hoặc request body. Tài khoản hiện tại được xác định từ Bearer token.
+- **Bổ sung thông tin:** gửi `complete: false`; checklist/ghi chú được lưu, phiếu vẫn đang sửa.
+- **Hoàn thành đơn sửa chữa:** gửi `complete: true`; backend xác thực điều kiện rồi mới chuyển trạng thái.
 
-**Phản hồi `200 OK`:**
-
-```json
-{
-  "actionRequired": [
-    { "id": 18, "customerName": "Nguyễn An", "device": "Laptop", "status": "PENDING" },
-    { "id": 19, "customerName": "Trần Bình", "device": "Điện thoại", "status": "CONFIRMED" }
-  ],
-  "received": [
-    { "id": 20, "customerName": "Lê Chi", "device": "Máy tính", "status": "RECEIVED" }
-  ],
-  "other": []
-}
-```
-
-Mỗi phần tử là một lịch hẹn, gồm các trường lịch hẹn như `id`, khách hàng, thiết bị, dịch vụ, thời gian, cách phục vụ, mô tả lỗi và `status`.
-
-- `actionRequired`: lịch `PENDING` (chờ xác nhận), `CONFIRMED` hoặc `CANCELLATION_REQUESTED`.
-- `received`: lịch đã tiếp nhận thiết bị (`RECEIVED`).
-- `other`: trạng thái khác, ví dụ `CANCELLED` hoặc `CONVERTED`.
-
-API cũ `GET /api/appointments/assigned/me` vẫn trả danh sách phẳng.
-
-## 2. Tiếp nhận thiết bị
-
-### `POST /api/repair-tickets/{id}/intake`
-
-**Ai dùng:** Kỹ thuật viên được giao phiếu hoặc admin.
-
-**Dùng để:** Ghi nhận tình trạng thiết bị lúc nhận, phụ kiện, lỗi khách báo, ghi chú tiếp nhận và ảnh. Khi thành công, phiếu sửa và lịch hẹn liên kết chuyển sang `RECEIVED`.
-
-**Đầu vào:** `multipart/form-data`.
-
-| Trường | Bắt buộc | Ý nghĩa và giới hạn |
-|---|---:|---|
-| `serialNumber` | Không | Số serial, tối đa 100 ký tự |
-| `appearanceCondition` | Có | Tình trạng thiết bị, tối đa 2.000 ký tự |
-| `includedAccessories` | Không | Phụ kiện đi kèm, tối đa 2.000 ký tự |
-| `customerReportedIssue` | Không | Lỗi khách báo, tối đa 5.000 ký tự |
-| `intakeNote` | Không | Ghi chú tiếp nhận, tối đa 2.000 ký tự |
-| `images` | Có | Từ 1 đến 5 ảnh JPEG/PNG, tối đa 5 MB mỗi ảnh |
-
-Ví dụ gửi form-data: `appearanceCondition=Trầy nhẹ mặt đáy`, `includedAccessories=Sạc`, `intakeNote=Khách báo máy tự tắt`; thêm một hoặc nhiều file với key `images`.
-
-**Phản hồi:** `201 Created`, gồm mã phiếu, thiết bị, thông tin tiếp nhận, người tiếp nhận, thời gian và danh sách ảnh dạng data URI.
-
-**Lỗi thường gặp:** `400` nếu thiếu trường bắt buộc hoặc ảnh không hợp lệ; `403` nếu không phải kỹ thuật viên được giao/admin; `409` nếu phiếu không còn `SCHEDULED`, đã có biên nhận hoặc lịch đang chờ xử lý yêu cầu hủy.
-
-## 3. Chẩn đoán
-
-### `PUT /api/repair-tickets/{id}/diagnosis`
-
-**Ai dùng:** Kỹ thuật viên được giao phiếu hoặc admin.
-
-**Dùng để:** Lưu kết quả kiểm tra và đề xuất sửa chữa. Cần tiếp nhận thiết bị trước; lưu chẩn đoán sẽ chuyển phiếu sang trạng thái chẩn đoán.
-
-**Đầu vào:** JSON.
+**Đầu vào:** `application/json`. Thay `{id}` bằng ID phiếu.
 
 ```json
 {
-  "diagnosisResult": "Kiểm tra adapter và mạch nguồn. Phát hiện nguồn lỗi.",
-  "repairProposal": "Thay nguồn tương thích và vệ sinh mạch.",
-  "technicalNote": "Đã kiểm tra ngoại quan trước khi tháo máy."
+  "deviceWorksNormally": true,
+  "mainFunctionsWork": true,
+  "noNewIssues": true,
+  "completionInfo": "Đã thay adapter, kiểm tra sạc và chạy thử.",
+  "complete": true
 }
 ```
 
-`diagnosisResult` và `repairProposal` bắt buộc, tối đa 5.000 ký tự mỗi trường. `technicalNote` tùy chọn, tối đa 2.000 ký tự.
+| Trường | Kiểu | Bắt buộc | Ý nghĩa |
+|---|---|---:|---|
+| `deviceWorksNormally` | boolean | Có | Thiết bị hoạt động bình thường |
+| `mainFunctionsWork` | boolean | Có | Chức năng chính hoạt động |
+| `noNewIssues` | boolean | Có | Không có lỗi phát sinh |
+| `completionInfo` | string | Khi hoàn tất | Thông tin kiểm tra/sửa chữa, tối đa 5.000 ký tự |
+| `complete` | boolean | Có | `false` chỉ lưu; `true` yêu cầu hoàn thành phiếu |
 
-### `GET /api/repair-tickets/{id}/diagnosis`
+**Khi `complete: false`:** backend lưu cả trạng thái đạt/chưa đạt của từng mục và ghi chú. Phiếu không đổi trạng thái.
 
-**Ai dùng:** Kỹ thuật viên được giao phiếu hoặc admin.
+**Khi `complete: true`:** cả ba mục phải là `true`, `completionInfo` không được trống và phiếu phải đang `REPAIRING` hoặc `IN_PROGRESS`. Backend lưu checklist, chuyển phiếu và lịch hẹn liên kết sang `COMPLETED`, đặt ngày hoàn thành và ghi lịch sử trong cùng transaction.
 
-**Dùng để:** Lấy thông tin chẩn đoán đã lưu để hiển thị hoặc tiếp tục xử lý.
-
-**Đầu vào:** Không có body; `{id}` là ID phiếu sửa.
-
-**Phản hồi:** `200 OK`, gồm `diagnosisResult`, `repairProposal`, `technicalNote`, người chẩn đoán và thời gian. Trường `customerReportedIssue` được dùng cho ô **Lỗi tiếp nhận**: ưu tiên lấy từ `intakeNote`, nếu trống thì lấy `customerReportedIssue`; nếu chưa có biên nhận thì lấy mô tả lỗi của lịch hẹn.
-
-## 4. Tạo và xác nhận báo giá
-
-### `POST /api/repair-tickets/{ticketId}/quote`
-
-**Ai dùng:** Kỹ thuật viên được giao phiếu hoặc admin.
-
-**Dùng để:** Tạo báo giá sau khi đã lưu chẩn đoán. Mỗi phiếu chỉ được tạo một báo giá; tạo báo giá chuyển phiếu sang chờ xác nhận và ghi sự kiện vào lịch sử xử lý.
-
-**Đầu vào:** JSON, có từ 1 đến 100 dòng hàng.
+**Phản hồi thành công `200 OK`:**
 
 ```json
 {
-  "items": [
-    { "name": "Adapter nguồn", "quantity": 1, "unitPrice": 450000 },
-    { "name": "Công sửa chữa", "quantity": 1, "unitPrice": 200000 }
-  ]
+  "id": 7,
+  "ticketId": 125,
+  "ticketCode": "PS00125",
+  "deviceWorksNormally": true,
+  "mainFunctionsWork": true,
+  "noNewIssues": true,
+  "completionInfo": "Đã thay adapter, kiểm tra sạc và chạy thử.",
+  "inspectedBy": "Nguyễn A",
+  "inspectedAt": "2026-10-31T14:25:00",
+  "completedAt": "2026-10-31T14:25:00",
+  "ticketStatus": "COMPLETED"
 }
 ```
 
-Mỗi dòng gồm tên, số lượng và đơn giá. Tổng tiền được tính từ các dòng hàng.
+`completedAt` là `null` nếu chỉ lưu checklist bằng `complete: false`.
 
-**Phản hồi:** `201 Created`, gồm mã báo giá, các dòng hàng, tổng tiền, trạng thái và thời gian tạo.
+**Lỗi thường gặp:**
 
-### `GET /api/repair-tickets/{ticketId}/quote`
+- `400 Bad Request`: thiếu trường bắt buộc hoặc thiếu `completionInfo` khi hoàn tất.
+- `403 Forbidden`: tài khoản không phải kỹ thuật viên được giao hoặc admin.
+- `404 Not Found`: không tìm thấy phiếu.
+- `409 Conflict`: phiếu không ở trạng thái sửa chữa hoặc có mục kiểm tra chưa đạt.
 
-**Ai dùng:** Khách hàng sở hữu phiếu, kỹ thuật viên được giao hoặc admin.
+## Đọc checklist đã lưu
 
-**Dùng để:** Xem báo giá của phiếu. Khách chỉ xem được báo giá thuộc phiếu của mình.
+### `GET /api/repair-tickets/{id}/final-inspection`
 
-**Đầu vào:** Không có body; `ticketId` là ID phiếu sửa.
+**Mục đích:** Tải lại checklist để hiển thị khi mở màn hình kiểm tra cuối.
 
-### `PATCH /api/quotes/{quoteId}/decision`
+**Quyền:** Kỹ thuật viên được giao phiếu hoặc admin.
 
-**Ai dùng:** Khách hàng sở hữu báo giá. Kỹ thuật viên được giao/admin cũng có thể gọi theo quyền hiện tại của API.
+**Đầu vào:** ID phiếu trong URL; không có query parameter hoặc request body.
 
-**Dùng để:** Xác nhận hoặc từ chối báo giá đang ở trạng thái `SENT`. Hành động được ghi vào lịch sử. Xác nhận chuyển phiếu sang `REPAIRING`; từ chối chuyển sang `CUSTOMER_DECLINED`.
+**Phản hồi:** `200 OK` với cấu trúc như response mẫu ở trên. Nếu chưa có checklist, trả `404 Not Found`.
 
-**Đầu vào:** JSON.
+## Luồng kiểm tra bằng Postman
 
-```json
-{ "decision": "ACCEPTED" }
-```
+Chuẩn bị phiếu đang `REPAIRING` hoặc `IN_PROGRESS`; chọn Bearer Token của kỹ thuật viên được giao phiếu hoặc admin.
 
-`decision` nhận `ACCEPTED` hoặc `REJECTED`.
+1. Gửi `POST http://localhost:8080/api/repair-tickets/{id}/final-inspection` với `complete: false`. Kiểm tra nhận `200 OK`; phiếu vẫn ở trạng thái sửa chữa.
+2. Thử gửi `complete: true` trong khi một mục là `false`. Kỳ vọng `409 Conflict`; phiếu không hoàn thành.
+3. Gửi lại với cả ba mục `true`, có nội dung `completionInfo` và `complete: true`. Kỳ vọng `200 OK`, `ticketStatus: COMPLETED` và `completedAt` có giá trị.
+4. Gọi `GET /api/repair-tickets/{id}/final-inspection` để xác nhận checklist đã lưu.
 
-**Phản hồi:** `200 OK`, gồm trạng thái mới của báo giá và tổng tiền.
-
-## 5. Tiến độ và dòng thời gian sửa chữa
-
-### `PATCH /api/repair-tickets/{id}/status`
-
-**Ai dùng:** Kỹ thuật viên được giao phiếu hoặc admin.
-
-**Dùng để:** Ghi từng lần cập nhật tiến độ, kèm ghi chú và ảnh. Các trạng thái `REPAIRING`, `IN_PROGRESS` và `WAITING_FOR_PARTS` có thể cập nhật nhiều lần. Gửi `COMPLETED` khi kết thúc sửa chữa.
-
-**Đầu vào:** `multipart/form-data`.
-
-| Trường | Bắt buộc | Ý nghĩa và giới hạn |
-|---|---:|---|
-| `status` | Có | Trạng thái tiến độ hợp lệ, ví dụ `REPAIRING`, `WAITING_FOR_PARTS`, `IN_PROGRESS`, `COMPLETED` |
-| `note` | Không | Ghi chú tiến độ, tối đa 2.000 ký tự |
-| `images` | Có | Từ 1 đến 5 ảnh JPEG/PNG, tối đa 5 MB mỗi ảnh |
-
-**Phản hồi:** `200 OK`, gồm trạng thái, ghi chú, thời gian, nhân viên cập nhật và ảnh. Mỗi cập nhật được lưu trong tracking và lịch sử xử lý.
-
-### `GET /api/repair-tickets/{id}/tracking`
-
-**Ai dùng:** Khách hàng sở hữu phiếu, kỹ thuật viên được giao hoặc admin.
-
-**Dùng để:** Xem trạng thái hiện tại và dòng thời gian đầy đủ của phiếu.
-
-**Đầu vào:** Không có body; `{id}` là ID phiếu sửa.
-
-**Phản hồi `200 OK`:**
-
-- `currentStatus`: trạng thái hiện tại của phiếu.
-- `updates`: danh sách cập nhật tiến độ cũ, giữ nguyên để tương thích client.
-- `timeline`: các sự kiện đã sắp theo thời gian: tiếp nhận (tình trạng, phụ kiện, lỗi và ghi chú), chẩn đoán, báo giá, khách xác nhận/từ chối, cập nhật sửa chữa và hoàn thành.
-
-Mỗi sự kiện trong `timeline` có `type`, `title`, `details`, `note`, `createdAt` và `actorName`.
-
-## 6. Lịch sử xử lý
-
-### `GET /api/repair-tickets/{id}/history`
-
-**Ai dùng:** Kỹ thuật viên được giao phiếu hoặc admin.
-
-**Dùng để:** Lấy các hoạt động xử lý theo thứ tự thời gian, gồm tiếp nhận, chẩn đoán, báo giá, quyết định của khách và cập nhật trạng thái.
-
-**Đầu vào:** Không có body; `{id}` là ID phiếu sửa.
-
-**Phản hồi:** Danh sách sự kiện, mỗi mục có `action`, `details`, `note`, `employeeName` và `createdAt`. Để xem cùng dữ liệu tiến độ theo một dòng thời gian, dùng endpoint tracking ở trên.
+Không thể hoàn thành bằng `PATCH /api/repair-tickets/{id}/status`; endpoint tiến độ từ chối `COMPLETED` để không bỏ qua checklist.
