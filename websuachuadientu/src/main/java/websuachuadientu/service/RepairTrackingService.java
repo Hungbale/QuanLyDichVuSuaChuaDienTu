@@ -25,7 +25,6 @@ import websuachuadientu.repository.RepairQuoteRepository;
 import websuachuadientu.enums.RepairTicketStatus;
 
 import java.io.IOException;
-import java.time.LocalDate;
 import java.util.Base64;
 import java.util.List;
 import java.util.ArrayList;
@@ -78,6 +77,10 @@ public class RepairTrackingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Use POST /api/repair-tickets/{id}/intake to receive a device");
         }
+        if (requestedStatus == RepairTicketStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Use POST /api/repair-tickets/{id}/final-inspection to complete the repair");
+        }
         String nextStatus = requestedStatus.storedValue();
         boolean sameStatus = nextStatus.equalsIgnoreCase(ticket.getStatus());
         boolean repeatableProgressStatus = requestedStatus == RepairTicketStatus.REPAIRING
@@ -123,9 +126,6 @@ public class RepairTrackingService {
         }
 
         ticket.setStatus(nextStatus);
-        if (requestedStatus == RepairTicketStatus.COMPLETED && ticket.getCompletedDate() == null) {
-            ticket.setCompletedDate(LocalDate.now());
-        }
         ticketRepository.save(ticket);
         if (requestedStatus == RepairTicketStatus.CANCELLED && ticket.getAppointment() != null) {
             ticket.getAppointment().setStatus("CANCELLED");
@@ -220,6 +220,8 @@ public class RepairTrackingService {
         return switch (action) {
             case "CUSTOMER_QUOTE_ACCEPTED" -> "Khách hàng xác nhận báo giá";
             case "CUSTOMER_QUOTE_DECLINED" -> "Khách hàng từ chối báo giá";
+            case "FINAL_INSPECTION_RECORDED" -> "Đã lưu kết quả kiểm tra sau sửa chữa";
+            case "REPAIR_COMPLETED" -> "Đã hoàn thành sửa chữa";
             case "TICKET_UPDATED" -> "Cập nhật phiếu sửa chữa";
             default -> action;
         };
