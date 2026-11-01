@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { getRepairPaymentsApi } from "../../api/repairPaymentApi";
 import { getRepairQuoteApi } from "../../api/repairQuoteApi";
 import { getRepairTrackingApi } from "../../api/repairTrackingApi";
@@ -19,7 +20,13 @@ type TimelineEvent = {
     photos?: { fileName: string; dataUri: string }[];
 };
 
-const messageOf = (error: any) => error.response?.data?.message || error.response?.data?.error || "Không thể tải tiến trình sửa chữa.";
+const errorPayload = (error: unknown) => {
+    if (!axios.isAxiosError(error)) return undefined;
+    const data: unknown = error.response?.data;
+    return typeof data === "object" && data !== null ? data as { message?: string; error?: string } : undefined;
+};
+const statusOf = (error: unknown) => axios.isAxiosError(error) ? error.response?.status : undefined;
+const messageOf = (error: unknown) => errorPayload(error)?.message || errorPayload(error)?.error || "Không thể tải tiến trình sửa chữa.";
 const formatDateTime = (value: string) => new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });
 const formatMoney = (value: number) => `${new Intl.NumberFormat("vi-VN").format(value)} ₫`;
 const progressSteps = ["SCHEDULED", "RECEIVED", "DIAGNOSING", "WAITING_FOR_QUOTE_APPROVAL", "REPAIRING", "COMPLETED"];
@@ -71,7 +78,7 @@ function RepairTracking() {
     useEffect(() => {
         getMyRepairHistoryApi()
             .then(setItems)
-            .catch((requestError: any) => setError(messageOf(requestError)))
+            .catch((requestError: unknown) => setError(messageOf(requestError)))
             .finally(() => setLoading(false));
     }, []);
 
@@ -111,14 +118,20 @@ function RepairTracking() {
         try {
             const [trackingDetails, quoteDetails, paymentList] = await Promise.all([
                 getRepairTrackingApi(item.ticketId),
-                getRepairQuoteApi(item.ticketId).catch(() => null),
-                getRepairPaymentsApi(item.ticketId).catch(() => [] as RepairPayment[]),
+                getRepairQuoteApi(item.ticketId).catch((requestError: unknown) => {
+                    if (statusOf(requestError) === 404) return null;
+                    throw requestError;
+                }),
+                getRepairPaymentsApi(item.ticketId).catch((requestError: unknown) => {
+                    if (statusOf(requestError) === 404) return [] as RepairPayment[];
+                    throw requestError;
+                }),
             ]);
             setTracking(trackingDetails);
             setQuote(quoteDetails);
             setPayments(paymentList);
-        } catch (requestError: any) {
-            setDetailError(requestError.response?.status === 403
+        } catch (requestError: unknown) {
+            setDetailError(statusOf(requestError) === 403
                 ? "Bạn không có quyền xem thông tin phiếu sửa chữa này."
                 : messageOf(requestError));
         } finally {
@@ -196,7 +209,7 @@ function RepairTracking() {
         <div className="appointment-filter-row"><label htmlFor="tracking-status-filter">Lọc trạng thái</label><select id="tracking-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{availableStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
         <div className="appointment-results-heading"><div><h2>Phiếu sửa chữa của tôi</h2><p>{loading ? "Đang tải..." : `${filteredItems.length} phiếu`}</p></div></div>
         {loading ? <div className="appointment-panel table-state">Đang tải tiến trình sửa chữa...</div> : error ? (
-            <div className="appointment-panel appointment-empty-state"><h2>Không tải được phiếu</h2><p>{error}</p><button className="secondary-button" type="button" onClick={() => { setLoading(true); setError(""); getMyRepairHistoryApi().then(setItems).catch((requestError: any) => setError(messageOf(requestError))).finally(() => setLoading(false)); }}>Thử tải lại</button></div>
+            <div className="appointment-panel appointment-empty-state"><h2>Không tải được phiếu</h2><p>{error}</p><button className="secondary-button" type="button" onClick={() => { setLoading(true); setError(""); getMyRepairHistoryApi().then(setItems).catch((requestError: unknown) => setError(messageOf(requestError))).finally(() => setLoading(false)); }}>Thử tải lại</button></div>
         ) : items.length === 0 ? (
             <div className="appointment-panel appointment-empty-state"><h2>Chưa có phiếu sửa chữa</h2><p>Phiếu sẽ xuất hiện tại đây khi thiết bị được tiếp nhận.</p></div>
         ) : filteredItems.length === 0 ? (

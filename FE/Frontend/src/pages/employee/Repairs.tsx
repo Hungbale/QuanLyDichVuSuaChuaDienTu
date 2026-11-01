@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import { getMyAssignedRepairTicketsApi, getRepairTicketApi, getRepairTicketHistoryApi } from "../../api/repairTicketApi";
 import { getRepairPaymentsApi } from "../../api/repairPaymentApi";
 import { getRepairQuoteApi } from "../../api/repairQuoteApi";
 import { getRepairDiagnosisApi } from "../../api/repairDiagnosisApi";
 import { getRepairIntakeApi } from "../../api/repairIntakeApi";
 import { getRepairTrackingApi } from "../../api/repairTrackingApi";
+import { getRepairFinalInspectionApi } from "../../api/repairFinalInspectionApi";
 import type { RepairTicket, RepairTicketActivity } from "../../types/repairTicket";
 import type { RepairPayment } from "../../types/repairPayment";
 import type { RepairQuote } from "../../types/repairQuote";
 import type { RepairIntakeReceipt } from "../../types/repairIntake";
 import type { RepairTrackingDetails } from "../../types/repairTracking";
+import type { RepairFinalInspection } from "../../types/repairFinalInspection";
 import { repairActivityLabel } from "../../utils/repairActivityLabel";
 import { repairTrackingTitle } from "../../utils/repairTrackingTitle";
 import { statusLabel as translateStatus } from "../../utils/statusLabel";
 
-const messageOf = (error: any) => error.response?.data?.message || error.response?.data?.error || "Không thể xử lý phiếu sửa chữa.";
+const errorPayload = (error: unknown) => {
+    if (!axios.isAxiosError(error)) return undefined;
+    const data: unknown = error.response?.data;
+    return typeof data === "object" && data !== null ? data as { message?: string; error?: string } : undefined;
+};
+const statusOf = (error: unknown) => axios.isAxiosError(error) ? error.response?.status : undefined;
+const messageOf = (error: unknown) => errorPayload(error)?.message || errorPayload(error)?.error || "Không thể xử lý phiếu sửa chữa.";
 const statusLabel = (status: string) => ({
     RECEIVED: "Đã tiếp nhận",
     SCHEDULED: "Chờ tiếp nhận",
@@ -45,8 +54,8 @@ function EmployeeRepairs() {
                 try {
                     const payments = await getRepairPaymentsApi(ticket.id);
                     return [ticket.id, payments] as const;
-                } catch (e: any) {
-                    if (e.response?.status === 404) return [ticket.id, []] as const;
+                } catch (e: unknown) {
+                    if (statusOf(e) === 404) return [ticket.id, []] as const;
                     throw e;
                 }
             }));
@@ -54,8 +63,8 @@ function EmployeeRepairs() {
                 try {
                     const quote = await getRepairQuoteApi(ticket.id);
                     return [ticket.id, quote] as const;
-                } catch (e: any) {
-                    if (e.response?.status === 404) return null;
+                } catch (e: unknown) {
+                    if (statusOf(e) === 404) return null;
                     throw e;
                 }
             }));
@@ -63,8 +72,8 @@ function EmployeeRepairs() {
                 try {
                     await getRepairDiagnosisApi(ticket.id);
                     return [ticket.id, true] as const;
-                } catch (e: any) {
-                    if (e.response?.status === 404) return [ticket.id, false] as const;
+                } catch (e: unknown) {
+                    if (statusOf(e) === 404) return [ticket.id, false] as const;
                     throw e;
                 }
             }));
@@ -73,11 +82,14 @@ function EmployeeRepairs() {
             setQuotesByTicket(Object.fromEntries(quoteStates.filter((entry): entry is readonly [number, RepairQuote] => entry !== null)));
             setDiagnosedTickets(Object.fromEntries(diagnosisStates));
         }
-        catch (e: any) { setError(messageOf(e)); }
+        catch (e: unknown) { setError(messageOf(e)); }
         finally { setLoading(false); }
     }, []);
 
-    useEffect(() => { void load(); }, [load]);
+    useEffect(() => {
+        const timer = window.setTimeout(() => void load(), 0);
+        return () => window.clearTimeout(timer);
+    }, [load]);
 
     const [detailTicket, setDetailTicket] = useState<RepairTicket | null>(null);
     const [detailQuote, setDetailQuote] = useState<RepairQuote | null>(null);
@@ -85,47 +97,56 @@ function EmployeeRepairs() {
     const [detailDiagnosis, setDetailDiagnosis] = useState<{ result: string; proposal: string } | null>(null);
     const [detailActivities, setDetailActivities] = useState<RepairTicketActivity[]>([]);
     const [detailTracking, setDetailTracking] = useState<RepairTrackingDetails | null>(null);
+    const [detailFinalInspection, setDetailFinalInspection] = useState<RepairFinalInspection | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
 
     const showDetails = async (ticket: RepairTicket) => {
+        setError("");
         setDetailTicket(ticket);
         setDetailQuote(null);
         setDetailIntake(null);
         setDetailDiagnosis(null);
         setDetailActivities([]);
         setDetailTracking(null);
+        setDetailFinalInspection(null);
         setDetailLoading(true);
         try {
-            const diagnosisPromise = getRepairDiagnosisApi(ticket.id).catch((e: any) => {
-                if (e.response?.status === 404) return null;
+            const diagnosisPromise = getRepairDiagnosisApi(ticket.id).catch((e: unknown) => {
+                if (statusOf(e) === 404) return null;
                 throw e;
             });
-            const quotePromise = getRepairQuoteApi(ticket.id).catch((e: any) => {
-                if (e.response?.status === 404) return null;
+            const quotePromise = getRepairQuoteApi(ticket.id).catch((e: unknown) => {
+                if (statusOf(e) === 404) return null;
                 throw e;
             });
-            const intakePromise = getRepairIntakeApi(ticket.id).catch((e: any) => {
-                if (e.response?.status === 404) return null;
+            const intakePromise = getRepairIntakeApi(ticket.id).catch((e: unknown) => {
+                if (statusOf(e) === 404) return null;
                 throw e;
             });
-            const [diagnosis, quote, intake, latestTicket, activities, tracking] = await Promise.all([
+            const finalInspectionPromise = getRepairFinalInspectionApi(ticket.id).catch((e: unknown) => {
+                if (statusOf(e) === 404) return null;
+                throw e;
+            });
+            const [diagnosis, quote, intake, finalInspection, latestTicket, activities, tracking] = await Promise.all([
                 diagnosisPromise,
                 quotePromise,
                 intakePromise,
+                finalInspectionPromise,
                 getRepairTicketApi(ticket.id),
                 getRepairTicketHistoryApi(ticket.id),
-                getRepairTrackingApi(ticket.id).catch((e: any) => {
-                    if (e.response?.status === 404) return null;
+                getRepairTrackingApi(ticket.id).catch((e: unknown) => {
+                    if (statusOf(e) === 404) return null;
                     throw e;
                 }),
             ]);
             setDetailDiagnosis(diagnosis ? { result: diagnosis.diagnosisResult, proposal: diagnosis.repairProposal } : null);
             setDetailQuote(quote);
             setDetailIntake(intake);
+            setDetailFinalInspection(finalInspection);
             setDetailTicket(latestTicket);
             setDetailActivities(activities);
             setDetailTracking(tracking);
-        } catch (e: any) {
+        } catch (e: unknown) {
             setError(messageOf(e));
         } finally {
             setDetailLoading(false);
@@ -180,17 +201,18 @@ function EmployeeRepairs() {
 
     return <main className="management-page appointment-page">
         <header className="appointment-page-header"><span className="appointment-eyebrow">FIXHUB · NHÂN VIÊN</span><h1>Phiếu sửa chữa</h1><p>Danh sách phiếu được giao cho bạn. Tiếp nhận phiếu rồi chuyển sang chẩn đoán thiết bị.</p></header>
-        {error && <div className="error-message" role="alert">{error}</div>}
+        {error && detailTicket && <div className="error-message" role="alert">{error}</div>}
         <form className="appointment-search-panel" onSubmit={(e: FormEvent) => { e.preventDefault(); void load(keyword); }}><div className="appointment-form-group"><label htmlFor="employee-ticket-search">Tìm phiếu</label><input id="employee-ticket-search" type="search" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Mã phiếu, tên hoặc số điện thoại khách" /></div><div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => { setKeyword(""); void load(); }} disabled={loading}>Xóa lọc</button><button className="primary-button" type="submit" disabled={loading}>Tìm phiếu</button></div></form>
         <div className="appointment-tabs" role="tablist" aria-label="Phân loại phiếu sửa chữa"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{tickets.filter((ticket) => !isPastTicket(ticket)).length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{tickets.filter(isPastTicket).length}</span></button></div>
         <div className="appointment-filter-row"><label htmlFor="employee-ticket-status">Lọc trạng thái</label><select id="employee-ticket-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{statusOptions.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
         <div className="appointment-results-heading"><div><h2>Phiếu {activeTab === "current" ? "hiện tại" : "đã qua"}</h2><p>{loading ? "Đang tải..." : `${visibleTickets.length} phiếu`}</p></div></div>
-        {loading ? <div className="appointment-panel table-state">Đang tải phiếu...</div> : visibleTickets.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>{activeTab === "current" ? "Không có phiếu hiện tại phù hợp" : "Chưa có phiếu đã qua phù hợp"}</h2></div> : <div className="appointment-panel appointment-table-container"><table className="appointment-table repair-ticket-table"><thead><tr><th>Mã phiếu</th><th>Khách hàng</th><th>Thiết bị</th><th>Ngày nhận</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{visibleTickets.map((ticket) => <tr key={ticket.id}><td><strong>{ticket.ticketCode}</strong></td><td><strong>{ticket.customerName}</strong><span>KH#{ticket.customerId}</span></td><td>{ticket.device}</td><td>{new Date(`${ticket.receivedDate}T00:00:00`).toLocaleDateString("vi-VN")}</td><td><span className="appointment-status">{statusLabel(ticket.status)}</span></td><td><div className="repair-ticket-actions"><button className="secondary-button" type="button" onClick={() => void showDetails(ticket)}>Chi tiết</button>{nextAction(ticket)}</div></td></tr>)}</tbody></table></div>}
+        {loading ? <div className="appointment-panel table-state">Đang tải phiếu...</div> : error && !detailTicket ? <div className="appointment-panel appointment-empty-state"><h2>Không tải được danh sách phiếu</h2><p>{error}</p><button className="secondary-button" type="button" onClick={() => void load(keyword)}>Thử tải lại</button></div> : visibleTickets.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>{activeTab === "current" ? "Không có phiếu hiện tại phù hợp" : "Chưa có phiếu đã qua phù hợp"}</h2></div> : <div className="appointment-panel appointment-table-container"><table className="appointment-table repair-ticket-table"><thead><tr><th>Mã phiếu</th><th>Khách hàng</th><th>Thiết bị</th><th>Ngày nhận</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{visibleTickets.map((ticket) => <tr key={ticket.id}><td><strong>{ticket.ticketCode}</strong></td><td><strong>{ticket.customerName}</strong><span>KH#{ticket.customerId}</span></td><td>{ticket.device}</td><td>{new Date(`${ticket.receivedDate}T00:00:00`).toLocaleDateString("vi-VN")}</td><td><span className="appointment-status">{statusLabel(ticket.status)}</span></td><td><div className="repair-ticket-actions"><button className="secondary-button" type="button" onClick={() => void showDetails(ticket)}>Chi tiết</button>{nextAction(ticket)}</div></td></tr>)}</tbody></table></div>}
         {detailTicket && <div className="repair-detail-backdrop" role="presentation" onClick={() => setDetailTicket(null)}><section className="appointment-panel repair-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="repair-detail-title" onClick={(event) => event.stopPropagation()}>
             <div className="appointment-card-top"><div><span className="appointment-card-reference">{detailTicket.ticketCode}</span><h2 id="repair-detail-title">Chi tiết phiếu sửa chữa</h2><p>{detailTicket.device}</p></div><button className="secondary-button" type="button" onClick={() => setDetailTicket(null)}>Đóng</button></div>
             <div className="appointment-details-grid"><div><span>Khách hàng</span><strong>{detailTicket.customerName} · KH#{detailTicket.customerId}</strong></div><div><span>Kỹ thuật viên</span><strong>{detailTicket.technicianName || "Chưa phân công"}</strong></div><div><span>Ngày nhận</span><strong>{new Date(`${detailTicket.receivedDate}T00:00:00`).toLocaleDateString("vi-VN")}</strong></div><div><span>Trạng thái</span><strong>{statusLabel(detailTicket.status)}</strong></div></div>
             <section className="repair-detail-section"><h3>Chi tiết tiếp nhận thiết bị</h3>{detailLoading ? <p>Đang tải biên nhận...</p> : detailIntake ? <><p><strong>Thời gian tiếp nhận:</strong> {new Date(detailIntake.receivedAt).toLocaleString("vi-VN")}</p><p><strong>Người tiếp nhận:</strong> {detailIntake.receivedBy}</p><p><strong>Số serial:</strong> {detailIntake.serialNumber || "Không ghi nhận"}</p><p><strong>Tình trạng ban đầu:</strong> {detailIntake.appearanceCondition}</p><p><strong>Phụ kiện đi kèm:</strong> {detailIntake.includedAccessories || "Không ghi nhận"}</p><p><strong>Lỗi khách phản ánh:</strong> {detailIntake.customerReportedIssue || "Không ghi nhận"}</p><p><strong>Ghi chú:</strong> {detailIntake.intakeNote || "Không có"}</p></> : <p>Phiếu chưa có biên nhận tiếp nhận.</p>}</section>
             <section className="repair-detail-section"><h3>Chẩn đoán & đề xuất sửa chữa</h3>{detailDiagnosis ? <><p><strong>Kết quả:</strong> {detailDiagnosis.result}</p><p><strong>Đề xuất:</strong> {detailDiagnosis.proposal}</p></> : <p>Phiếu chưa có chẩn đoán được lưu trên hệ thống.</p>}</section>
+            <section className="repair-detail-section"><h3>Kiểm tra sau sửa chữa</h3>{detailLoading ? <p>Đang tải kết quả kiểm tra...</p> : detailFinalInspection ? <><p><strong>Thiết bị hoạt động bình thường:</strong> {detailFinalInspection.deviceWorksNormally ? "Đạt" : "Chưa đạt"}</p><p><strong>Chức năng chính hoạt động:</strong> {detailFinalInspection.mainFunctionsWork ? "Đạt" : "Chưa đạt"}</p><p><strong>Không có lỗi mới:</strong> {detailFinalInspection.noNewIssues ? "Đạt" : "Chưa đạt"}</p>{detailFinalInspection.completionInfo && <p><strong>Kết quả / ghi chú:</strong> {detailFinalInspection.completionInfo}</p>}<p><strong>Người kiểm tra:</strong> {detailFinalInspection.inspectedBy}</p><p><strong>Thời gian kiểm tra:</strong> {new Date(detailFinalInspection.inspectedAt).toLocaleString("vi-VN")}</p>{detailFinalInspection.completedAt && <p><strong>Hoàn thành lúc:</strong> {new Date(detailFinalInspection.completedAt).toLocaleString("vi-VN")}</p>}</> : <p>Chưa ghi nhận kết quả kiểm tra sau sửa chữa.</p>}</section>
             <section className="repair-detail-section"><h3>Báo giá</h3>{detailLoading ? <p>Đang tải báo giá...</p> : detailQuote ? <><p><strong>{detailQuote.quoteCode}</strong> · {detailQuote.status === "ACCEPTED" ? "Khách đã xác nhận" : detailQuote.status === "REJECTED" ? "Khách từ chối" : "Chờ khách xác nhận"}</p><ul>{detailQuote.items.map((item) => <li key={item.id}>{item.name} × {item.quantity} — {new Intl.NumberFormat("vi-VN").format(item.lineTotal)} ₫</li>)}</ul><p><strong>Tổng báo giá: {new Intl.NumberFormat("vi-VN").format(detailQuote.totalAmount)} ₫</strong></p></> : <p>Phiếu chưa có báo giá.</p>}</section>
             <section className="repair-detail-section"><h3>Thanh toán</h3>{(paymentsByTicket[detailTicket.id] || []).length ? (paymentsByTicket[detailTicket.id] || []).map((payment) => <p key={payment.id}>{payment.method === "BANK_TRANSFER" ? "Chuyển khoản" : "Tiền mặt"} · {new Intl.NumberFormat("vi-VN").format(payment.amount)} ₫ · {payment.status === "PAID" ? "Đã xác nhận thanh toán" : "Chờ xác nhận"}</p>) : <p>Chưa có yêu cầu thanh toán.</p>}</section>
             <section className="repair-detail-section"><h3>Lịch sử xử lý từ hệ thống</h3>{detailTracking?.timeline.length ? <ol className="repair-timeline">{detailTracking.timeline.map((event, index) => {

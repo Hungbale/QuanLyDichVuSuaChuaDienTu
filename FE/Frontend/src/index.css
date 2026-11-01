@@ -3555,6 +3555,32 @@ th {
     overflow-wrap: anywhere;
 }
 
+.repair-inspection-checklist {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 14px 16px;
+    border: 1px solid #e1d8f0;
+    border-radius: 12px;
+    color: #51476a;
+}
+
+.repair-inspection-checklist legend {
+    padding: 0 6px;
+    color: #44375e;
+    font-weight: 700;
+}
+
+.repair-inspection-checklist label {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.repair-inspection-checklist input {
+    accent-color: #7354aa;
+}
+
 .repair-completion-review .appointment-form-group textarea {
     width: 100%;
     resize: vertical;
@@ -3569,6 +3595,14 @@ th {
 @media (max-width: 520px) {
     .repair-status-progress-steps {
         font-size: 9px;
+    }
+
+    .repair-progress-modal-actions > button {
+        flex: 1 1 100%;
+    }
+
+    .repair-inspection-checklist {
+        padding: 12px;
     }
 }
 
