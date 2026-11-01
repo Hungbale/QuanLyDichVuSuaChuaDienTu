@@ -25,6 +25,7 @@ function Payment() {
     const [notice, setNotice] = useState("");
     const [activeTab, setActiveTab] = useState<"current" | "past">("current");
     const [statusFilter, setStatusFilter] = useState("ALL");
+    const [createdPayment, setCreatedPayment] = useState<{ item: PaymentItem; payment: RepairPayment } | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -68,7 +69,8 @@ function Payment() {
         try {
             const payment = await createRepairPaymentApi(item.quote.repairTicketId, method);
             setNotice(`Đã tạo yêu cầu thanh toán ${payment.ticketCode} bằng ${methodLabel(method).toLowerCase()}.`);
-            await load();
+            setCreatedPayment({ item, payment });
+            void load();
         } catch (e: any) { setError(messageOf(e)); }
         finally { setSavingId(null); }
     };
@@ -94,6 +96,16 @@ function Payment() {
                 </section>}
             </article>;
         })}</div>}
+        {createdPayment && <div className="repair-detail-backdrop" role="presentation" onClick={() => setCreatedPayment(null)}>
+            <section className="appointment-panel repair-detail-dialog payment-created-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-created-title" onClick={(event) => event.stopPropagation()}>
+                <div className="appointment-card-top"><div><span className="appointment-card-reference">{createdPayment.payment.ticketCode}</span><h2 id="payment-created-title">Đã tạo yêu cầu thanh toán</h2><p>{createdPayment.item.history.device} · {createdPayment.item.quote.ticketCode}</p></div><button className="secondary-button" type="button" onClick={() => setCreatedPayment(null)}>Đóng</button></div>
+                <div className="appointment-details-grid"><div><span>Số tiền</span><strong>{money(createdPayment.payment.amount)}</strong></div><div><span>Hình thức thanh toán</span><strong>{methodLabel(createdPayment.payment.method)}</strong></div><div><span>Hạn thanh toán</span><strong>{new Date(`${createdPayment.payment.dueDate}T00:00:00`).toLocaleDateString("vi-VN")}</strong></div><div><span>Trạng thái</span><strong>{createdPayment.payment.status === "PAID" ? "Đã thanh toán" : "Chờ xác nhận"}</strong></div></div>
+                {createdPayment.payment.method === "BANK_TRANSFER" ? <section className="payment-qr-panel" aria-label="Mã QR chuyển khoản">
+                    <div><span className="appointment-eyebrow">THANH TOÁN CHUYỂN KHOẢN</span><h3>Quét mã QR để chuyển đúng số tiền</h3><p>MBBank · 50007122005</p><p>Nội dung chuyển khoản: <strong>FIXHUB {createdPayment.payment.ticketCode}</strong></p><p>Sau khi chuyển khoản, nhân viên sẽ xác nhận trên hệ thống.</p></div>
+                    <img src={vietQrUrl(createdPayment.payment.amount, createdPayment.payment.ticketCode)} alt={`QR chuyển ${money(createdPayment.payment.amount)} đến MBBank`} />
+                </section> : <p className="payment-pending-note">Vui lòng thanh toán tiền mặt tại cửa hàng. Nhân viên sẽ xác nhận giao dịch trên hệ thống.</p>}
+            </section>
+        </div>}
     </main>;
 }
 

@@ -22,6 +22,19 @@ type TimelineEvent = {
 const messageOf = (error: any) => error.response?.data?.message || error.response?.data?.error || "Không thể tải tiến trình sửa chữa.";
 const formatDateTime = (value: string) => new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });
 const formatMoney = (value: number) => `${new Intl.NumberFormat("vi-VN").format(value)} ₫`;
+const progressSteps = ["SCHEDULED", "RECEIVED", "DIAGNOSING", "WAITING_FOR_QUOTE_APPROVAL", "REPAIRING", "COMPLETED"];
+const progressPercent = (status: string) => {
+    const normalized = status.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[ -]+/g, "_");
+    const aliases: Record<string, string> = {
+        DA_LEN_LICH: "SCHEDULED", DA_TIEP_NHAN: "RECEIVED", DANG_KIEM_TRA: "DIAGNOSING",
+        CHO_XAC_NHAN_BAO_GIA: "WAITING_FOR_QUOTE_APPROVAL", DANG_SUA: "REPAIRING",
+        DANG_SUA_CHUA: "REPAIRING", HOAN_THANH: "COMPLETED",
+    };
+    const canonical = aliases[normalized] || normalized;
+    if (["CANCELLED", "CUSTOMER_DECLINED", "CANNOT_BE_REPAIRED"].includes(canonical)) return null;
+    const step = progressSteps.indexOf(canonical);
+    return step < 0 ? 0 : Math.round((step / (progressSteps.length - 1)) * 100);
+};
 const statusTitle = (status: string) => ({
     "Đã tiếp nhận": "Tiếp nhận thiết bị",
     "Đang kiểm tra": "Kiểm tra thiết bị",
@@ -52,6 +65,7 @@ function RepairTracking() {
     const [previewPhoto, setPreviewPhoto] = useState<{ fileName: string; dataUri: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState("");
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -82,6 +96,7 @@ function RepairTracking() {
         setQuote(null);
         setPayments([]);
         setPreviewPhoto(null);
+        setDetailError("");
         setError("");
     };
 
@@ -91,6 +106,7 @@ function RepairTracking() {
         setQuote(null);
         setPayments([]);
         setDetailLoading(true);
+        setDetailError("");
         setError("");
         try {
             const [trackingDetails, quoteDetails, paymentList] = await Promise.all([
@@ -102,7 +118,9 @@ function RepairTracking() {
             setQuote(quoteDetails);
             setPayments(paymentList);
         } catch (requestError: any) {
-            setError(messageOf(requestError));
+            setDetailError(requestError.response?.status === 403
+                ? "Bạn không có quyền xem thông tin phiếu sửa chữa này."
+                : messageOf(requestError));
         } finally {
             setDetailLoading(false);
         }
@@ -170,7 +188,6 @@ function RepairTracking() {
 
     return <main className="management-page appointment-page">
         <header className="appointment-page-header"><span className="appointment-eyebrow">FIXHUB · KHÁCH HÀNG</span><h1>Theo dõi sửa chữa</h1><p>Tìm phiếu và xem từng mốc xử lý thiết bị theo thời gian thực tế từ hệ thống.</p></header>
-        {error && !selected && <div className="error-message" role="alert">{error}</div>}
         <form className="appointment-search-panel" onSubmit={(event) => event.preventDefault()}>
             <div className="appointment-form-group"><label htmlFor="repair-tracking-search">Tìm phiếu sửa chữa</label><input id="repair-tracking-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã phiếu, thiết bị, dịch vụ hoặc trạng thái" /></div>
             <div className="appointment-search-actions"><button className="secondary-button" type="button" disabled={!search} onClick={() => setSearch("")}>Xóa tìm kiếm</button></div>
@@ -178,7 +195,9 @@ function RepairTracking() {
         <div className="appointment-tabs" role="tablist" aria-label="Phân loại tiến độ sửa chữa"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{items.filter((item) => !item.completedDate && !["Hoàn thành", "Đã kết thúc", "Đã hủy", "Khách từ chối", "Khách đã từ chối", "COMPLETED", "CANCELLED", "CUSTOMER_DECLINED"].includes(item.status)).length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{items.length - items.filter((item) => !item.completedDate && !["Hoàn thành", "Đã kết thúc", "Đã hủy", "Khách từ chối", "Khách đã từ chối", "COMPLETED", "CANCELLED", "CUSTOMER_DECLINED"].includes(item.status)).length}</span></button></div>
         <div className="appointment-filter-row"><label htmlFor="tracking-status-filter">Lọc trạng thái</label><select id="tracking-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{availableStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
         <div className="appointment-results-heading"><div><h2>Phiếu sửa chữa của tôi</h2><p>{loading ? "Đang tải..." : `${filteredItems.length} phiếu`}</p></div></div>
-        {loading ? <div className="appointment-panel table-state">Đang tải tiến trình sửa chữa...</div> : items.length === 0 ? (
+        {loading ? <div className="appointment-panel table-state">Đang tải tiến trình sửa chữa...</div> : error ? (
+            <div className="appointment-panel appointment-empty-state"><h2>Không tải được phiếu</h2><p>{error}</p><button className="secondary-button" type="button" onClick={() => { setLoading(true); setError(""); getMyRepairHistoryApi().then(setItems).catch((requestError: any) => setError(messageOf(requestError))).finally(() => setLoading(false)); }}>Thử tải lại</button></div>
+        ) : items.length === 0 ? (
             <div className="appointment-panel appointment-empty-state"><h2>Chưa có phiếu sửa chữa</h2><p>Phiếu sẽ xuất hiện tại đây khi thiết bị được tiếp nhận.</p></div>
         ) : filteredItems.length === 0 ? (
             <div className="appointment-panel appointment-empty-state"><h2>Không tìm thấy phiếu phù hợp</h2><p>Thử đổi từ khóa hoặc trạng thái lọc.</p></div>
@@ -193,9 +212,10 @@ function RepairTracking() {
         {selected && <div className="repair-detail-backdrop" role="presentation" onClick={closeDetails}>
             <section className="appointment-panel repair-detail-dialog customer-tracking-dialog" role="dialog" aria-modal="true" aria-labelledby="tracking-detail-title" onClick={(event) => event.stopPropagation()}>
                 <div className="appointment-card-top"><div><span className="appointment-card-reference">{selected.ticketCode}</span><h2 id="tracking-detail-title">Tiến độ sửa chữa</h2><p>{selected.device}</p></div><button className="secondary-button" type="button" onClick={closeDetails}>Đóng</button></div>
-                {error && <div className="error-message" role="alert">{error}</div>}
-                {detailLoading ? <div className="table-state">Đang tải các mốc tiến độ...</div> : <>
+                {detailError && <div className="error-message" role="alert">{detailError}</div>}
+                {detailLoading ? <div className="table-state">Đang tải các mốc tiến độ...</div> : detailError ? null : <>
                     <div className="appointment-details-grid tracking-summary"><div><span>Trạng thái hiện tại</span><strong>{statusLabel(tracking?.currentStatus || selected.status)}</strong></div><div><span>Phản hồi báo giá</span><strong>{quoteDecisionLabel}</strong></div><div><span>Dịch vụ</span><strong>{quote?.items.map((line) => line.name).join(", ") || selected.bookedService || selected.service || "Chưa có thông tin"}</strong></div></div>
+                    {progressPercent(tracking?.currentStatus || selected.status) !== null && <section className="repair-status-progress" aria-label="Tiến độ sửa chữa"><div className="repair-status-progress-heading"><strong>Tiến độ sửa chữa</strong><span>{progressPercent(tracking?.currentStatus || selected.status)}%</span></div><div className="repair-status-progress-track"><span style={{ width: `${progressPercent(tracking?.currentStatus || selected.status)}%` }} /></div><div className="repair-status-progress-steps"><span>Tiếp nhận</span><span>Kiểm tra</span><span>Báo giá</span><span>Sửa chữa</span><span>Hoàn tất</span></div></section>}
                     {timeline.length === 0 ? <div className="appointment-empty-state"><p>Chưa có mốc tiến độ được ghi nhận.</p></div> : <ol className="repair-timeline">{timeline.map((event) => <li className="repair-timeline-event" key={event.id}>
                         <span className="repair-timeline-marker" aria-hidden="true" />
                         <div className="repair-timeline-content"><div className="repair-timeline-heading"><h3>{event.title}</h3><time>{event.date ? formatDateTime(event.date) : "Chưa có thời điểm"}</time></div>
