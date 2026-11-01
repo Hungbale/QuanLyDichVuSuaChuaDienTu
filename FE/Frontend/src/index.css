@@ -1877,61 +1877,100 @@ th {
 @media (max-width: 700px) {
     .sidebar,
     .sidebar-collapsed {
-        position: sticky;
-        top: 0;
-        width: 100%;
+        position: fixed;
+        z-index: 1000;
+        top: 12px;
+        bottom: 12px;
+        left: 0;
+        width: min(290px, calc(100vw - 48px));
         height: auto;
         min-height: 0;
-        max-height: 100vh;
-        padding: 10px 14px;
+        max-height: none;
+        padding: 12px;
+        border: 1px solid #45414f;
+        border-left: 0;
+        border-radius: 0 16px 16px 0;
+        box-shadow: 0 18px 48px rgb(0 0 0 / 35%);
+        transition: transform 180ms ease;
     }
 
     .sidebar-top {
-        min-height: 40px;
-        padding: 0 2px 8px;
+        min-height: 44px;
+        padding: 0 2px 8px 8px;
+    }
+
+    .sidebar-collapsed {
+        width: 64px;
+        padding: 8px 6px;
+        overflow: hidden;
+        background: #17151d;
+        box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
     }
 
     .sidebar-collapsed .sidebar-top {
+        min-height: 40px;
         flex-direction: row;
-        justify-content: space-between;
-        padding: 0 2px 8px;
+        justify-content: center;
+        padding: 0;
+        border: 0;
     }
 
-    .sidebar-user,
+    .sidebar-collapsed .sidebar-logo,
     .sidebar-collapsed .sidebar-user {
         display: none;
     }
 
+    .sidebar-user {
+        display: block;
+        padding: 12px 8px;
+    }
+
     .sidebar-menu {
         display: flex;
-        flex: 0 0 auto;
+        flex: 1 1 auto;
+        flex-direction: column;
         gap: 4px;
-        overflow-x: auto;
-        overflow-y: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
         margin: 8px 0 0;
         padding: 0 0 4px;
     }
 
     .menu-item {
         flex: 0 0 auto;
-        min-height: 40px;
-        padding: 8px 10px;
+        min-height: 42px;
+        padding: 9px 10px;
     }
 
     .sidebar-collapsed .menu-item {
-        flex: 0 0 42px;
+        display: flex;
+        justify-content: center;
+        width: 42px;
+        padding-right: 0;
+        padding-left: 0;
     }
 
-    .logout-button,
-    .sidebar-collapsed .logout-button {
+    .logout-button {
         width: 100%;
         min-height: 42px;
         justify-content: center;
-        margin-top: 6px;
+        margin-top: 10px;
     }
 
-    .sidebar-collapsed .logout-label {
-        display: inline;
+    .sidebar-collapsed .logout-button {
+        display: flex;
+        width: 42px;
+        min-height: 42px;
+        padding: 0;
+    }
+
+    .main-content {
+        padding: 20px 16px;
+    }
+
+    /* Keep page content clear of the compact icon rail. */
+    .app-layout:has(> .sidebar-collapsed) > .main-content {
+        margin-left: 64px;
     }
 }
 
