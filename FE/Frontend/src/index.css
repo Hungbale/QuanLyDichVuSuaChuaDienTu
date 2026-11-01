@@ -3474,6 +3474,104 @@ th {
     margin: 20px 0;
 }
 
+.repair-status-progress {
+    margin: 18px 0 24px;
+    padding: 16px 18px;
+    border: 1px solid #e8e2f0;
+    border-radius: 14px;
+    background: #fcfaff;
+}
+
+.repair-status-progress-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    color: #44375e;
+}
+
+.repair-status-progress-heading span {
+    color: #795db1;
+    font-weight: 700;
+}
+
+.repair-status-progress-track {
+    height: 9px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e9e3f1;
+}
+
+.repair-status-progress-track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #a992d5, #7354aa);
+    transition: width 180ms ease;
+}
+
+.repair-status-progress-steps {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 8px;
+    color: #777283;
+    font-size: 11px;
+}
+
+.repair-completion-review {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border: 1px solid #e1d8f0;
+    border-radius: 14px;
+    background: #fcfaff;
+}
+
+.repair-completion-review h3,
+.repair-completion-review p {
+    margin: 0;
+}
+
+.repair-completion-review h3 {
+    color: #44375e;
+}
+
+.repair-completion-review > p {
+    color: #71677f;
+    line-height: 1.5;
+}
+
+.repair-completion-summary {
+    padding: 12px;
+    border-radius: 10px;
+    background: #f1edf7;
+    color: #51476a;
+}
+
+.repair-completion-summary p {
+    margin-top: 6px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.repair-completion-review .appointment-form-group textarea {
+    width: 100%;
+    resize: vertical;
+    padding: 12px 14px;
+    border: 1px solid #d7dee8;
+    border-radius: 10px;
+    color: #273449;
+    background: #fff;
+    font: inherit;
+}
+
+@media (max-width: 520px) {
+    .repair-status-progress-steps {
+        font-size: 9px;
+    }
+}
+
 .tracking-timestamp-note {
     padding: 10px 12px;
     border-radius: 9px;
@@ -3753,6 +3851,51 @@ th {
     color: #806a3b;
     font-size: 12px;
     line-height: 1.5;
+}
+
+.payment-created-dialog {
+    width: min(900px, 100%);
+}
+
+.payment-qr-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    align-items: center;
+    gap: 24px;
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #e6e0ef;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #fbf9ff, #f2f7ff);
+}
+
+.payment-qr-panel h3 {
+    margin: 8px 0;
+    color: #332e40;
+}
+
+.payment-qr-panel p {
+    margin: 7px 0;
+    color: #625d6e;
+    line-height: 1.55;
+}
+
+.payment-qr-panel img {
+    display: block;
+    width: 100%;
+    border-radius: 12px;
+    background: white;
+}
+
+@media (max-width: 640px) {
+    .payment-qr-panel {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+
+    .payment-qr-panel img {
+        width: min(100%, 260px);
+    }
 }
 
 .diagnosis-note {
