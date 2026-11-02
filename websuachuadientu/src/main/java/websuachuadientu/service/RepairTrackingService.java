@@ -79,7 +79,7 @@ public class RepairTrackingService {
         }
         if (requestedStatus == RepairTicketStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Use POST /api/repair-tickets/{id}/final-inspection to complete the repair");
+                    "Vui lòng dùng chức năng kiểm tra cuối để hoàn thành phiếu sửa chữa");
         }
         String nextStatus = requestedStatus.storedValue();
         boolean sameStatus = nextStatus.equalsIgnoreCase(ticket.getStatus());

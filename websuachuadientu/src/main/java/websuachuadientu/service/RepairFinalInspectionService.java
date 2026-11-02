@@ -15,6 +15,7 @@ import websuachuadientu.repository.AppointmentRepository;
 import websuachuadientu.repository.RepairFinalInspectionRepository;
 import websuachuadientu.repository.RepairTicketActivityRepository;
 import websuachuadientu.repository.RepairTicketRepository;
+import websuachuadientu.repository.RepairPaymentRepository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,12 +28,13 @@ public class RepairFinalInspectionService {
     private final EmployeeRepository employeeRepository;
     private final AppointmentRepository appointmentRepository;
     private final RepairTicketActivityRepository activityRepository;
+    private final RepairPaymentRepository paymentRepository;
 
     @Transactional
     public RepairFinalInspectionResponse save(Long ticketId, RepairFinalInspectionRequest request,
                                              String email, boolean admin) {
         var ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repair ticket not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu sửa chữa"));
         var employee = employeeRepository.findByUser_Email(email).orElse(null);
         ensureAssigned(ticket, employee == null ? null : employee.getId(), email, admin);
 
@@ -41,11 +43,11 @@ public class RepairFinalInspectionService {
             currentStatus = RepairTicketStatus.fromValue(ticket.getStatus());
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Current ticket status must be reviewed before final inspection", exception);
+                    "Trạng thái hiện tại của phiếu không hợp lệ để kiểm tra cuối", exception);
         }
         if (currentStatus != RepairTicketStatus.REPAIRING && currentStatus != RepairTicketStatus.IN_PROGRESS) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Final inspection is only available while the ticket is being repaired");
+                    "Chỉ có thể kiểm tra cuối khi phiếu đang trong quá trình sửa chữa");
         }
 
         RepairFinalInspection inspection = inspectionRepository.findByRepairTicket_Id(ticketId)
@@ -61,16 +63,24 @@ public class RepairFinalInspectionService {
         boolean complete = Boolean.TRUE.equals(request.complete());
         if (complete && completionInfo == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Completion information is required to complete the repair ticket");
+                    "Vui lòng nhập thông tin hoàn thành trước khi kết thúc phiếu sửa chữa");
         }
         if (complete && !(inspection.isDeviceWorksNormally()
                 && inspection.isMainFunctionsWork() && inspection.isNoNewIssues())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "All final inspection checks must pass before completing the repair ticket");
+                    "Cả ba mục kiểm tra phải đạt trước khi hoàn thành phiếu sửa chữa");
         }
         if (complete && !currentStatus.canTransitionTo(RepairTicketStatus.COMPLETED)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Repair ticket cannot transition to completed from its current status");
+                    "Không thể hoàn thành phiếu từ trạng thái hiện tại");
+        }
+        if (complete) {
+            boolean paymentPaid = paymentRepository.findByQuote_RepairTicket_IdOrderByCreatedAtDesc(ticketId).stream()
+                    .findFirst().map(payment -> "PAID".equals(payment.getStatus())).orElse(false);
+            if (!paymentPaid) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Cần xác nhận thanh toán thành công trước khi hoàn thành phiếu sửa chữa");
+            }
         }
 
         if (complete) {
@@ -105,12 +115,12 @@ public class RepairFinalInspectionService {
     @Transactional(readOnly = true)
     public RepairFinalInspectionResponse get(Long ticketId, String email, boolean admin) {
         var ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repair ticket not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu sửa chữa"));
         var employee = employeeRepository.findByUser_Email(email).orElse(null);
         ensureAssigned(ticket, employee == null ? null : employee.getId(), email, admin);
         RepairFinalInspection inspection = inspectionRepository.findByRepairTicket_Id(ticketId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Final inspection has not been recorded for this ticket"));
+                        "Phiếu sửa chữa chưa có thông tin kiểm tra cuối"));
         return toResponse(inspection);
     }
 
@@ -119,7 +129,7 @@ public class RepairFinalInspectionService {
         if (!admin && (employeeId == null || ticket.getTechnician() == null
                 || !ticket.getTechnician().getId().equals(employeeId))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Only the assigned technician can perform final inspection");
+                    "Chỉ kỹ thuật viên được giao phiếu mới có quyền kiểm tra cuối");
         }
     }
 
