@@ -7,7 +7,7 @@ Tài liệu này chỉ mô tả luồng nhân viên kiểm tra thiết bị sau 
 - Người gọi API phải đăng nhập bằng Bearer token.
 - Kỹ thuật viên được giao phiếu hoặc admin mới được lưu/đọc checklist.
 - Phiếu phải đang ở trạng thái `REPAIRING` hoặc `IN_PROGRESS`.
-- Để hoàn thành phiếu, cả ba mục kiểm tra phải đạt và phải có thông tin hoàn thành.
+- Để hoàn thành phiếu, cả ba mục kiểm tra phải đạt, phải có thông tin hoàn thành và khoản thanh toán mới nhất phải ở trạng thái `PAID`.
 
 ## Lưu kết quả kiểm tra hoặc hoàn tất phiếu
 
@@ -40,7 +40,7 @@ Tài liệu này chỉ mô tả luồng nhân viên kiểm tra thiết bị sau 
 
 **Khi `complete: false`:** backend lưu cả trạng thái đạt/chưa đạt của từng mục và ghi chú. Phiếu không đổi trạng thái.
 
-**Khi `complete: true`:** cả ba mục phải là `true`, `completionInfo` không được trống và phiếu phải đang `REPAIRING` hoặc `IN_PROGRESS`. Backend lưu checklist, chuyển phiếu và lịch hẹn liên kết sang `COMPLETED`, đặt ngày hoàn thành và ghi lịch sử trong cùng transaction.
+**Khi `complete: true`:** cả ba mục phải là `true`, `completionInfo` không được trống, phiếu phải đang `REPAIRING` hoặc `IN_PROGRESS`, và khoản thanh toán mới nhất phải `PAID`. Backend lưu checklist, chuyển phiếu và lịch hẹn liên kết sang `COMPLETED`, đặt ngày hoàn thành và ghi lịch sử trong cùng transaction.
 
 **Phản hồi thành công `200 OK`:**
 
@@ -67,7 +67,16 @@ Tài liệu này chỉ mô tả luồng nhân viên kiểm tra thiết bị sau 
 - `400 Bad Request`: thiếu trường bắt buộc hoặc thiếu `completionInfo` khi hoàn tất.
 - `403 Forbidden`: tài khoản không phải kỹ thuật viên được giao hoặc admin.
 - `404 Not Found`: không tìm thấy phiếu.
-- `409 Conflict`: phiếu không ở trạng thái sửa chữa hoặc có mục kiểm tra chưa đạt.
+- `409 Conflict`: phiếu không ở trạng thái sửa chữa, có mục kiểm tra chưa đạt, hoặc chưa thanh toán `PAID`.
+
+### Đánh dấu thanh toán đã nhận
+
+Hoàn tất thanh toán trước khi gửi `complete: true`:
+
+1. Khách hàng tạo giao dịch: `POST /api/repair-tickets/{ticketId}/payments` với body `{ "method": "BANK_TRANSFER" }` hoặc `{ "method": "CASH" }`. Giao dịch mới có trạng thái `PENDING`.
+2. Sau khi nhận tiền, kỹ thuật viên được giao hoặc admin gọi `PATCH /api/payments/{paymentId}/confirm`. Trạng thái giao dịch chuyển thành `PAID`.
+
+Nếu khoản thanh toán vẫn `PENDING` hoặc chưa có giao dịch, API hoàn thành trả `409 Conflict` và không chuyển phiếu sang `COMPLETED`.
 
 ## Đọc checklist đã lưu
 
@@ -87,7 +96,8 @@ Chuẩn bị phiếu đang `REPAIRING` hoặc `IN_PROGRESS`; chọn Bearer Token
 
 1. Gửi `POST http://localhost:8080/api/repair-tickets/{id}/final-inspection` với `complete: false`. Kiểm tra nhận `200 OK`; phiếu vẫn ở trạng thái sửa chữa.
 2. Thử gửi `complete: true` trong khi một mục là `false`. Kỳ vọng `409 Conflict`; phiếu không hoàn thành.
-3. Gửi lại với cả ba mục `true`, có nội dung `completionInfo` và `complete: true`. Kỳ vọng `200 OK`, `ticketStatus: COMPLETED` và `completedAt` có giá trị.
-4. Gọi `GET /api/repair-tickets/{id}/final-inspection` để xác nhận checklist đã lưu.
+3. Đảm bảo giao dịch thanh toán của phiếu đã được xác nhận `PAID`. Thử hoàn thành khi giao dịch còn `PENDING` để xác nhận API trả `409 Conflict`.
+4. Sau khi giao dịch là `PAID`, gửi lại với cả ba mục `true`, có nội dung `completionInfo` và `complete: true`. Kỳ vọng `200 OK`, `ticketStatus: COMPLETED` và `completedAt` có giá trị.
+5. Gọi `GET /api/repair-tickets/{id}/final-inspection` để xác nhận checklist đã lưu.
 
 Không thể hoàn thành bằng `PATCH /api/repair-tickets/{id}/status`; endpoint tiến độ từ chối `COMPLETED` để không bỏ qua checklist.

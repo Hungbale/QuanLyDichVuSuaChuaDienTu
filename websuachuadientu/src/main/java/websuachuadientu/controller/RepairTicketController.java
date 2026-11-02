@@ -87,7 +87,7 @@ public class RepairTicketController {
     public ResponseEntity<RepairIntakeResponse> receiveDevice(
             @PathVariable Long id,
             @Valid @ModelAttribute RepairIntakeRequest request,
-            @RequestParam("images") List<MultipartFile> images,
+            @RequestPart("images") List<MultipartFile> images,
             Authentication authentication) {
         return ResponseEntity.status(HttpStatus.CREATED).body(intakeService.receive(
                 id, request, images, authentication.getName(), isAdmin(authentication)));
@@ -137,7 +137,7 @@ public class RepairTicketController {
             @PathVariable Long id,
             @RequestParam String status,
             @RequestParam(required = false) String note,
-            @RequestParam("images") List<MultipartFile> images,
+            @RequestPart("images") List<MultipartFile> images,
             Authentication authentication) {
         boolean admin = isAdmin(authentication);
         return ResponseEntity.ok(trackingService.updateStatus(
