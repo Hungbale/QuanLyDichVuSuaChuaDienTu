@@ -215,6 +215,10 @@ function EmployeeRepairProcess() {
     };
     const saveFinalInspection = async () => {
         if (!editingTicket || !validateUpdate()) return;
+        if (!inspectionResult.trim()) {
+            setError("Vui lòng nhập kết quả kiểm tra sau sửa chữa trước khi lưu.");
+            return;
+        }
         const completionInfo = [inspectionResult.trim(), inspectionNote.trim()].filter(Boolean).join("\n\n");
         if (completionInfo.length > 5000) {
             setError("Nội dung kiểm tra không được vượt quá 5.000 ký tự.");
@@ -227,7 +231,7 @@ function EmployeeRepairProcess() {
             await updateRepairTicketStatusApi(editingTicket.id, editingTicket.status, [evidencePhoto!], progressNote.trim());
             await saveRepairFinalInspectionApi(editingTicket.id, {
                 ...inspectionChecks,
-                completionInfo: completionInfo || undefined,
+                completionInfo,
                 complete: false,
             });
             setInspectionSavedNotice("Đã lưu kết quả kiểm tra sau sửa chữa.");

@@ -30,17 +30,22 @@ const messageOf = (error: unknown) => errorPayload(error)?.message || errorPaylo
 const formatDateTime = (value: string) => new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });
 const formatMoney = (value: number) => `${new Intl.NumberFormat("vi-VN").format(value)} ₫`;
 const progressSteps = ["SCHEDULED", "RECEIVED", "DIAGNOSING", "WAITING_FOR_QUOTE_APPROVAL", "REPAIRING", "COMPLETED"];
-const progressPercent = (status: string) => {
-    const normalized = status.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[ -]+/g, "_");
+const progressPercent = (status: string): number | null => {
+    const normalized = status.replace(/[\u0110\u0111]/g, "D").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[ -]+/g, "_");
     const aliases: Record<string, string> = {
         DA_LEN_LICH: "SCHEDULED", DA_TIEP_NHAN: "RECEIVED", DANG_KIEM_TRA: "DIAGNOSING",
         CHO_XAC_NHAN_BAO_GIA: "WAITING_FOR_QUOTE_APPROVAL", DANG_SUA: "REPAIRING",
-        DANG_SUA_CHUA: "REPAIRING", HOAN_THANH: "COMPLETED",
+        DANG_SUA_CHUA: "REPAIRING", DANG_XU_LY: "IN_PROGRESS", CHO_LINH_KIEN: "WAITING_FOR_PARTS",
+        HOAN_THANH: "COMPLETED",
     };
     const canonical = aliases[normalized] || normalized;
     if (["CANCELLED", "CUSTOMER_DECLINED", "CANNOT_BE_REPAIRED"].includes(canonical)) return null;
+    if (canonical === "IN_PROGRESS" || canonical === "WAITING_FOR_PARTS") {
+        const repairStep = progressSteps.indexOf("REPAIRING");
+        return Math.round((repairStep / (progressSteps.length - 1)) * 100);
+    }
     const step = progressSteps.indexOf(canonical);
-    return step < 0 ? 0 : Math.round((step / (progressSteps.length - 1)) * 100);
+    return step < 0 ? null : Math.round((step / (progressSteps.length - 1)) * 100);
 };
 const statusTitle = (status: string) => ({
     "Đã tiếp nhận": "Tiếp nhận thiết bị",
