@@ -56,14 +56,14 @@ public class SecurityConfig {
                                 "/api/auth/login"
                         ).permitAll()
 
-                        // Tạm thời cho phép tất cả API
+                        // Tài liệu API
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // Admin có toàn quyền trên các API.
+                        // Logout cho tất cả user đã xác thực
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout")
                         .hasAnyRole("CUSTOMER", "EMPLOYEE", "ADMIN")
 
@@ -114,6 +114,34 @@ public class SecurityConfig {
                         .hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/repair-tickets/*/payments")
                         .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+
+                        // Service Reviews (UC12)
+                        .requestMatchers(HttpMethod.POST, "/api/repair-tickets/*/reviews")
+                        .hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/repair-tickets/*/reviews")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/me")
+                        .hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/services/*/reviews")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/reviews")
+                        .hasRole("ADMIN")
+
+                        // Warranty Requests (UC13)
+                        .requestMatchers(HttpMethod.POST, "/api/warranty-requests", "/api/repair-tickets/*/warranty-requests")
+                        .hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/warranty-requests/me")
+                        .hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/repair-tickets/*/warranty-requests")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/warranty-requests/*")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/warranty-requests/*/attachment")
+                        .hasAnyRole("ADMIN", "CUSTOMER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.GET, "/api/warranty-requests")
+                        .hasAnyRole("ADMIN", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.PATCH, "/api/warranty-requests/*/process")
+                        .hasAnyRole("ADMIN", "EMPLOYEE")
 
                         // Employee: xử lý nghiệp vụ nội bộ và tra cứu khách hàng.
                         .requestMatchers("/api/repair-tickets/**", "/api/quotes/**", "/api/payments/**")
