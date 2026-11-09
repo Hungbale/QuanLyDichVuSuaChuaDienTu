@@ -3231,6 +3231,52 @@ th {
     min-width: 0;
 }
 
+.admin-sprint8-panel {
+    display: grid;
+    min-width: 0;
+    gap: 16px;
+}
+
+.admin-billing-sections {
+    display: grid;
+    gap: 20px;
+}
+
+.warranty-image-dialog > img {
+    display: block;
+    max-width: 100%;
+    max-height: 68vh;
+    margin: 0 auto;
+    object-fit: contain;
+}
+
+
+.admin-sprint8-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid #e8e4ec;
+    border-radius: 14px;
+    background: #fff;
+}
+
+.sprint8-admin-dialog {
+    max-height: min(86vh, 900px);
+    overflow-y: auto;
+}
+
+.sprint8-readonly-note {
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    border: 1px solid #e5e0eb;
+    border-radius: 10px;
+    background: #f8f6fa;
+    color: #625b70;
+    line-height: 1.55;
+}
+
+
 .appointment-tab {
     display: inline-flex;
     align-items: center;
@@ -3960,6 +4006,171 @@ th {
     background: white;
 }
 
+.sprint8-card-list {
+    display: grid;
+    gap: 16px;
+}
+
+.sprint8-feature-card {
+    min-width: 0;
+}
+
+.sprint8-review-form,
+.sprint8-warranty-form {
+    display: grid;
+    gap: 16px;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid #eeeaf2;
+}
+
+.sprint8-review-form > .primary-button,
+.sprint8-warranty-form > .primary-button {
+    justify-self: start;
+    min-height: 44px;
+    border-radius: 10px;
+}
+
+.sprint8-rating-field {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.sprint8-rating-field legend,
+.appointment-form-group label span {
+    color: #777283;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.sprint8-stars {
+    display: flex;
+    gap: 8px;
+    margin-top: 7px;
+}
+
+.sprint8-star {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #c9c3d1;
+    cursor: pointer;
+    font-size: 30px;
+    line-height: 1;
+}
+
+.sprint8-star.selected {
+    color: #e5a832;
+}
+
+.sprint8-star:focus-visible {
+    outline: 2px solid #8470ac;
+    outline-offset: 3px;
+}
+
+.sprint8-review-score {
+    color: #e5a832;
+    white-space: nowrap;
+}
+
+.sprint8-review-score span {
+    color: #625d6e;
+    font-size: 13px;
+}
+
+.sprint8-review-comment,
+.warranty-request-summary {
+    margin: 14px 0 0;
+    padding: 14px 16px;
+    border: 1px solid #eeeaf2;
+    border-radius: 12px;
+    background: #fbfaff;
+    color: #514d5b;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.warranty-request-summary {
+    display: grid;
+    gap: 6px;
+}
+
+.warranty-request-summary p {
+    margin: 0;
+}
+
+.warranty-request-summary small,
+.warranty-policy-note {
+    display: block;
+    color: #777283;
+    font-size: 12px;
+}
+
+.warranty-open-note,
+.warranty-resolution {
+    color: #675438;
+}
+
+.sprint8-warranty-form .appointment-form-group input[type="file"] {
+    min-height: auto;
+    padding: 10px;
+    background: white;
+}
+
+.sprint8-quote-dialog {
+    width: min(760px, 100%);
+}
+
+.sprint8-quote-line > div {
+    display: grid;
+    gap: 4px;
+}
+
+.sprint8-quote-line small {
+    color: #777283;
+    font-size: 12px;
+}
+
+.sprint8-readonly-note {
+    margin: 12px 0 0;
+    color: #625d6e;
+}
+
+.inline-retry-button {
+    margin-left: 12px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+    .sprint8-feature-card .appointment-card-top {
+        align-items: flex-start;
+    }
+
+    .sprint8-feature-card .appointment-card-top > .appointment-status {
+        align-self: flex-start;
+    }
+
+    .sprint8-review-score {
+        white-space: normal;
+    }
+
+    .sprint8-review-form > .primary-button,
+    .sprint8-warranty-form > .primary-button {
+        width: 100%;
+    }
+
+    .sprint8-quote-line {
+        align-items: flex-start;
+    }
+}
+
 @media (max-width: 640px) {
     .payment-qr-panel {
         grid-template-columns: 1fr;
@@ -4287,6 +4498,10 @@ th {
 
     .repair-management-tabs {
         overflow-x: auto;
+    }
+
+    .admin-sprint8-filters {
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .repair-management-tab {
