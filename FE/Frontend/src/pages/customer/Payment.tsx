@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useCallback, useEffect, useState } from "react";
 import { createRepairPaymentApi, getRepairPaymentsApi } from "../../api/repairPaymentApi";
 import { getRepairQuoteApi } from "../../api/repairQuoteApi";
@@ -13,7 +14,13 @@ const vietQrUrl = (amount: number, ticketCode: string) => {
 };
 const money = (amount: number) => `${new Intl.NumberFormat("vi-VN").format(amount)} ₫`;
 const methodLabel = (method: RepairPaymentMethod) => method === "BANK_TRANSFER" ? "Chuyển khoản" : "Tiền mặt";
-const messageOf = (error: any) => error.response?.data?.message || error.response?.data?.error || "Không thể tải hoặc tạo yêu cầu thanh toán.";
+const messageOf = (error: unknown) => {
+    if (axios.isAxiosError(error)) {
+        const body = error.response?.data as { message?: string; error?: string } | undefined;
+        return body?.message || body?.error || "Không thể tải hoặc tạo yêu cầu thanh toán.";
+    }
+    return "Đã xảy ra lỗi khi xử lý thanh toán. Vui lòng thử lại.";
+};
 
 function Payment() {
     const [items, setItems] = useState<PaymentItem[]>([]);
@@ -32,26 +39,27 @@ function Payment() {
         try {
             const history = await getMyRepairHistoryApi();
             const resolved = await Promise.all(history.map(async (entry): Promise<PaymentItem | null> => {
-                const ticketCodeMatch = /^PS(\d+)$/i.exec(entry.ticketCode);
-                if (!ticketCodeMatch) return null;
-                const ticketId = Number(ticketCodeMatch[1]);
+                const ticketId = entry.ticketId;
                 try {
                     const quote = await getRepairQuoteApi(ticketId);
                     if (quote.status !== "ACCEPTED") return null;
                     const payments = await getRepairPaymentsApi(ticketId);
                     return { history: entry, quote, payments };
-                } catch (e: any) {
-                    if (e.response?.status === 404) return null;
+                } catch (e: unknown) {
+                    if (axios.isAxiosError(e) && e.response?.status === 404) return null;
                     throw e;
                 }
             }));
             setItems(resolved.filter((item): item is PaymentItem => item !== null)
                 .sort((a, b) => (b.payments[0]?.createdAt || b.quote.createdAt).localeCompare(a.payments[0]?.createdAt || a.quote.createdAt)));
-        } catch (e: any) { setError(messageOf(e)); }
+        } catch (e: unknown) { setError(messageOf(e)); }
         finally { setLoading(false); }
     }, []);
 
-    useEffect(() => { void load(); }, [load]);
+    useEffect(() => {
+        const timer = window.setTimeout(() => { void load(); }, 0);
+        return () => window.clearTimeout(timer);
+    }, [load]);
 
     const paymentState = (item: PaymentItem) => item.payments.some((entry) => entry.status === "PAID")
         ? "PAID" : item.payments.length ? "PENDING" : "UNPAID";
@@ -70,7 +78,7 @@ function Payment() {
             setNotice(`Đã tạo yêu cầu thanh toán ${payment.ticketCode} bằng ${methodLabel(method).toLowerCase()}.`);
             setCreatedPayment({ item, payment });
             void load();
-        } catch (e: any) { setError(messageOf(e)); }
+        } catch (e: unknown) { setError(messageOf(e)); }
         finally { setSavingId(null); }
     };
 
@@ -80,7 +88,7 @@ function Payment() {
         <div className="appointment-tabs" role="tablist" aria-label="Phân loại thanh toán"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{currentItems.length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{pastItems.length}</span></button></div>
         <div className="appointment-filter-row"><label htmlFor="payment-status-filter">Lọc trạng thái</label><select id="payment-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option><option value="UNPAID">Chưa tạo yêu cầu</option><option value="PENDING">Chờ xác nhận</option><option value="PAID">Đã thanh toán</option></select></div>
         <div className="appointment-results-heading"><div><h2>{activeTab === "current" ? "Khoản thanh toán hiện tại" : "Khoản thanh toán đã qua"}</h2><p>{loading ? "Đang tải..." : `${visibleItems.length} khoản thanh toán`}</p></div></div>
-        {loading ? <div className="appointment-panel table-state">Đang tải thông tin thanh toán...</div> : visibleItems.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>{activeTab === "current" ? "Không có khoản thanh toán hiện tại" : "Chưa có khoản thanh toán đã qua"}</h2><p>Khoản thanh toán tương ứng sẽ xuất hiện tại đây.</p></div> : <div className="payment-list">{visibleItems.map((item) => {
+        {loading ? <div className="appointment-panel table-state">Đang tải thông tin thanh toán...</div> : error && items.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>Không tải được thông tin thanh toán</h2><p>{error}</p><button className="secondary-button" type="button" onClick={() => void load()}>Thử tải lại</button></div> : visibleItems.length === 0 ? <div className="appointment-panel appointment-empty-state"><h2>{activeTab === "current" ? "Không có khoản thanh toán hiện tại" : "Chưa có khoản thanh toán đã qua"}</h2><p>Khoản thanh toán tương ứng sẽ xuất hiện tại đây.</p></div> : <div className="payment-list">{visibleItems.map((item) => {
             const payment = item.payments.find((entry) => entry.status === "PAID") || item.payments[0];
             const hasPaid = payment?.status === "PAID";
             return <article className="appointment-panel payment-card" key={item.quote.id}>
