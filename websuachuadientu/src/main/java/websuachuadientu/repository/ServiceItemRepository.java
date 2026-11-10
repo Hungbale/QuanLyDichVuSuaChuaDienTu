@@ -15,13 +15,15 @@ public interface ServiceItemRepository extends JpaRepository<ServiceItem, Long> 
         WHERE (:keyword IS NULL OR :keyword = ''
                OR LOWER(s.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(s.serviceCode) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        AND (:includeInactiveCategory = true OR s.category.status = 'ACTIVE')
         AND (:status IS NULL OR :status = '' OR s.status = :status)
         AND (:categoryId IS NULL OR s.category.id = :categoryId)
         """)
     List<ServiceItem> search(
             @Param("keyword") String keyword,
             @Param("status") String status,
-            @Param("categoryId") Long categoryId
+            @Param("categoryId") Long categoryId,
+            @Param("includeInactiveCategory") boolean includeInactiveCategory
     );
 
     boolean existsByServiceCode(String serviceCode);

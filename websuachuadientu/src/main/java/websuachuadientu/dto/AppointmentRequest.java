@@ -22,6 +22,9 @@ public class AppointmentRequest {
     @NotNull
     private Long serviceId;
 
+    // Used when staff creates an appointment on a customer's behalf.
+    private Long customerId;
+
     @NotNull
     @FutureOrPresent
     private LocalDate appointmentDate;

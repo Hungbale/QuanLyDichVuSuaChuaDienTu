@@ -31,12 +31,13 @@ public class CustomerService {
 
         return customerRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Không tìm thấy khách hàng"));
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khách hàng"));
     }
 
     public Customer getByEmail(String email) {
         return customerRepository.findByUser_Email(email)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy hồ sơ khách hàng"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Không tìm thấy hồ sơ khách hàng"));
     }
 
     @Transactional
@@ -57,7 +58,7 @@ public class CustomerService {
         }
 
         if (request.getPassword() == null || request.getPassword().isBlank()) {
-            throw new RuntimeException("Mật khẩu không được để trống");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu không được để trống");
         }
 
         User user = new User();
@@ -111,16 +112,13 @@ public class CustomerService {
         return update(getByEmail(email).getId(), request);
     }
 
-    public Customer changeStatus(Long id) {
-
+    @Transactional
+    public Customer changeStatus(Long id, String status) {
         Customer customer = getById(id);
-
-        if ("ACTIVE".equals(customer.getStatus())) {
-            customer.setStatus("LOCKED");
-        } else {
-            customer.setStatus("ACTIVE");
+        if (!"ACTIVE".equals(status) && !"LOCKED".equals(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer status must be ACTIVE or LOCKED");
         }
-
+        customer.setStatus(status);
         return customerRepository.save(customer);
     }
 }

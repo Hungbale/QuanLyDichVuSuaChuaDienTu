@@ -8,5 +8,6 @@ public record RepairTrackingResponse(
         String serviceName,
         String device,
         String currentStatus,
-        List<RepairStatusUpdateResponse> updates
+        List<RepairStatusUpdateResponse> updates,
+        List<RepairTimelineEventResponse> timeline
 ) {}

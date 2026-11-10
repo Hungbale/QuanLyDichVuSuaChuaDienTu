@@ -53,6 +53,9 @@ public class Appointment {
     @Column(length = 500)
     private String pickupAddress;
 
+    @Column(length = 1000)
+    private String cancellationReason;
+
     @Column(nullable = false, length = 30)
     private String status = "PENDING";
 

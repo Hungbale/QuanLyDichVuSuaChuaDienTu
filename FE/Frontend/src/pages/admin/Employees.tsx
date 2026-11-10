@@ -4,6 +4,7 @@ import {
     changeEmployeeStatusApi,
     createEmployeeApi,
     deleteEmployeeApi,
+    getEmployeeByIdApi,
     getEmployeesApi,
     updateEmployeeApi,
 } from "../../api/employeeApi";
@@ -28,6 +29,16 @@ function AdminEmployees() {
     const [showModal, setShowModal] = useState(false);
     const [editingEmployee, setEditingEmployee] =
         useState<Employee | null>(null);
+    const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+
+    const viewEmployee = async (employee: Employee) => {
+        setDetailLoading(true);
+        setError("");
+        try { setViewingEmployee(await getEmployeeByIdApi(employee.id)); }
+        catch (error: any) { setError(error.response?.data?.message || "Không thể tải chi tiết nhân viên."); }
+        finally { setDetailLoading(false); }
+    };
 
     const [form, setForm] = useState<EmployeeRequest>({
         employeeCode: "",
@@ -165,7 +176,7 @@ function AdminEmployees() {
         }
 
         if (!form.email.trim()) {
-            setError("Email không được để trống.");
+            setError("Địa chỉ thư điện tử không được để trống.");
             return;
         }
 
@@ -436,7 +447,7 @@ function AdminEmployees() {
                                 <th>ID</th>
                                 <th>Mã nhân viên</th>
                                 <th>Họ tên</th>
-                                <th>Email</th>
+                                <th>Địa chỉ thư điện tử</th>
                                 <th>Số điện thoại</th>
                                 <th>Trạng thái</th>
                                 <th>Thao tác</th>
@@ -484,6 +495,7 @@ function AdminEmployees() {
 
                                     <td>
                                         <div className="action-buttons">
+                                            <button className="secondary-button" type="button" onClick={() => void viewEmployee(employee)}>Chi tiết</button>
                                             <button
                                                 className="secondary-button"
                                                 onClick={() =>
@@ -627,7 +639,7 @@ function AdminEmployees() {
                                 }}
                             >
                                 <label>
-                                    Email
+                                    Địa chỉ thư điện tử
                                 </label>
 
                                 <input
@@ -729,6 +741,8 @@ function AdminEmployees() {
                     </div>
                 </div>
             )}
+            {detailLoading && <div className="modal-overlay"><div className="modal customer-modal">Đang tải hồ sơ nhân viên...</div></div>}
+            {viewingEmployee && <div className="modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingEmployee(null); }}><section className="modal customer-modal" role="dialog" aria-modal="true" aria-labelledby="employee-detail-title"><div className="modal-header"><div><h2 id="employee-detail-title">Hồ sơ nhân viên</h2><p>{viewingEmployee.employeeCode}</p></div><button className="modal-close" type="button" aria-label="Đóng" onClick={() => setViewingEmployee(null)}>×</button></div><div className="appointment-details-grid"><div><span>Họ tên</span><strong>{viewingEmployee.fullName}</strong></div><div><span>Địa chỉ thư điện tử</span><strong>{viewingEmployee.email || viewingEmployee.user?.email || "—"}</strong></div><div><span>Số điện thoại</span><strong>{viewingEmployee.phone}</strong></div><div><span>Trạng thái</span><strong>{viewingEmployee.status === "ACTIVE" ? "Đang hoạt động" : "Đã khóa"}</strong></div></div><div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => setViewingEmployee(null)}>Đóng</button></div></section></div>}
         </div>
     );
 }

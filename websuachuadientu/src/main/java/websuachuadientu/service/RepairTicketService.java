@@ -9,11 +9,15 @@ import websuachuadientu.dto.RepairHistoryResponse;
 import websuachuadientu.entity.Customer;
 import websuachuadientu.entity.Employee;
 import websuachuadientu.entity.RepairTicket;
+import websuachuadientu.entity.RepairTicketActivity;
+import websuachuadientu.dto.RepairTicketActivityResponse;
 import websuachuadientu.repository.CustomerRepository;
 import websuachuadientu.repository.EmployeeRepository;
 import websuachuadientu.repository.RepairTicketRepository;
 import websuachuadientu.repository.AppointmentRepository;
 import websuachuadientu.repository.ServiceItemRepository;
+import websuachuadientu.repository.RepairTicketActivityRepository;
+import websuachuadientu.enums.RepairTicketStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -27,12 +31,14 @@ public class RepairTicketService {
     private final EmployeeRepository employeeRepository;
     private final AppointmentRepository appointmentRepository;
     private final ServiceItemRepository serviceItemRepository;
+    private final RepairTicketActivityRepository activityRepository;
 
     @Transactional
     public RepairTicketResponse createForAppointment(websuachuadientu.entity.Appointment appointment) {
         if (ticketRepository.existsByAppointment_Id(appointment.getId())) {
             RepairTicket existing = ticketRepository.findByAppointment_Id(appointment.getId())
-                    .orElseThrow(() -> new IllegalStateException("Repair ticket exists but could not be loaded"));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Appointment already has a repair ticket; refresh and try again"));
             return toResponse(existing);
         }
         if (appointment.getCustomer() == null || appointment.getTechnician() == null) {
@@ -44,7 +50,7 @@ public class RepairTicketService {
         ticket.setCustomer(appointment.getCustomer());
         ticket.setDevice(appointment.getDevice());
         ticket.setReceivedDate(appointment.getAppointmentDate());
-        ticket.setStatus("SCHEDULED");
+        ticket.setStatus(RepairTicketStatus.SCHEDULED.storedValue());
         ticket.setTechnician(appointment.getTechnician());
         ticket.setAppointment(appointment);
         ticket.setService(appointment.getService());
@@ -70,6 +76,10 @@ public class RepairTicketService {
 
     @Transactional
     public RepairTicketResponse create(RepairTicketRequest request) {
+        if (request.getStatus() != RepairTicketStatus.SCHEDULED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "A new repair ticket must start in SCHEDULED status");
+        }
         RepairTicket ticket = new RepairTicket();
         if (request.getAppointmentId() != null) {
             var appointment = appointmentRepository.findById(request.getAppointmentId())
@@ -89,8 +99,8 @@ public class RepairTicketService {
             }
             ticket.setCustomer(appointment.getCustomer());
             ticket.setDevice(appointment.getDevice());
-            ticket.setReceivedDate(request.getReceivedDate());
-            ticket.setStatus(request.getStatus().trim());
+            ticket.setReceivedDate(appointment.getAppointmentDate());
+            ticket.setStatus(RepairTicketStatus.SCHEDULED.storedValue());
             ticket.setTechnician(appointment.getTechnician());
             ticket.setAppointment(appointment);
             ticket.setService(appointment.getService());
@@ -113,23 +123,102 @@ public class RepairTicketService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Only an admin can reassign a repair ticket");
         }
-        if (!ticket.getStatus().equals(request.getStatus().trim())) {
+        if (!ticket.getStatus().equals(request.getStatus().storedValue())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Change ticket status through PATCH /api/repair-tickets/{id}/status with evidence photos");
         }
+        if (ticket.getAppointment() != null) {
+            var linkedAppointment = ticket.getAppointment();
+            if (!ticket.getDevice().equals(request.getDevice().trim())
+                    || !ticket.getReceivedDate().equals(request.getReceivedDate())
+                    || !ticket.getCustomer().getId().equals(request.getCustomerId())
+                    || (request.getServiceId() != null && !java.util.Objects.equals(
+                    ticket.getService() == null ? null : ticket.getService().getId(), request.getServiceId()))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Device, customer, date, and service on an appointment-linked ticket cannot be edited independently");
+            }
+            if (admin && (request.getTechnicianId() == null
+                    || linkedAppointment.getTechnician() == null
+                    || !linkedAppointment.getTechnician().getId().equals(request.getTechnicianId()))) {
+                if (request.getTechnicianId() == null) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "An appointment-linked ticket must keep its assigned technician");
+                }
+                linkedAppointment.setTechnician(employeeRepository.findById(request.getTechnicianId())
+                        .filter(employee -> "ACTIVE".equals(employee.getStatus()))
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Technician does not exist or is inactive")));
+                appointmentRepository.save(linkedAppointment);
+            }
+        }
+        if (!admin && (!ticket.getDevice().equals(request.getDevice().trim())
+                || !ticket.getReceivedDate().equals(request.getReceivedDate())
+                || !ticket.getCustomer().getId().equals(request.getCustomerId())
+                || (request.getServiceId() != null && !java.util.Objects.equals(
+                ticket.getService() == null ? null : ticket.getService().getId(), request.getServiceId())))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only admin can change the customer, device, service, or received date");
+        }
+        List<String> changedFields = new java.util.ArrayList<>();
+        if (!ticket.getDevice().equals(request.getDevice().trim())) {
+            changedFields.add("device: " + ticket.getDevice() + " -> " + request.getDevice().trim());
+        }
+        if (!ticket.getReceivedDate().equals(request.getReceivedDate())) {
+            changedFields.add("receivedDate: " + ticket.getReceivedDate() + " -> " + request.getReceivedDate());
+        }
+        if (!ticket.getCustomer().getId().equals(request.getCustomerId())) {
+            changedFields.add("customerId: " + ticket.getCustomer().getId() + " -> " + request.getCustomerId());
+        }
+        if (request.getTechnicianId() == null
+                ? ticket.getTechnician() != null
+                : ticket.getTechnician() == null || !ticket.getTechnician().getId().equals(request.getTechnicianId())) {
+            changedFields.add("technicianId: "
+                    + (ticket.getTechnician() == null ? null : ticket.getTechnician().getId())
+                    + " -> " + request.getTechnicianId());
+        }
+        if (request.getServiceId() != null
+                && (ticket.getService() == null || !ticket.getService().getId().equals(request.getServiceId()))) {
+            changedFields.add("serviceId: "
+                    + (ticket.getService() == null ? null : ticket.getService().getId())
+                    + " -> " + request.getServiceId());
+        }
         apply(ticket, request);
-        if (("Hoàn thành".equalsIgnoreCase(request.getStatus())
-                || "COMPLETED".equalsIgnoreCase(request.getStatus()))
-                && ticket.getCompletedDate() == null) {
+        if (request.getStatus() == RepairTicketStatus.COMPLETED && ticket.getCompletedDate() == null) {
             ticket.setCompletedDate(java.time.LocalDate.now());
         }
-        return toResponse(ticketRepository.save(ticket));
+        RepairTicket saved = ticketRepository.save(ticket);
+        if (!changedFields.isEmpty() || (request.getNote() != null && !request.getNote().isBlank())) {
+            RepairTicketActivity activity = new RepairTicketActivity();
+            activity.setRepairTicket(saved);
+            activity.setEmployee(employeeRepository.findByUser_Email(email).orElse(null));
+            activity.setAction("TICKET_UPDATED");
+            activity.setDetails(changedFields.isEmpty() ? null : String.join(" | ", changedFields));
+            activity.setNote(request.getNote() == null || request.getNote().isBlank()
+                    ? null : request.getNote().trim());
+            activityRepository.save(activity);
+        }
+        return toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RepairTicketActivityResponse> getHistory(Long id, String email, boolean admin) {
+        RepairTicket ticket = findTicket(id);
+        ensureAssigned(ticket, email, admin);
+        return activityRepository.findByRepairTicket_IdOrderByCreatedAtAscIdAsc(id).stream()
+                .map(activity -> new RepairTicketActivityResponse(
+                        activity.getId(), activity.getAction(), activity.getDetails(), activity.getNote(),
+                        activity.getEmployee() == null
+                                ? (activity.getAction().startsWith("CUSTOMER_") ? "Khách hàng" : "Admin")
+                                : activity.getEmployee().getFullName(),
+                        activity.getCreatedAt()))
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public List<RepairHistoryResponse> getMyHistory(String email) {
         var customer = customerRepository.findByUser_Email(email)
-                .orElseThrow(() -> new IllegalArgumentException("Tài khoản không thuộc khách hàng nào"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Tài khoản không thuộc hồ sơ khách hàng nào"));
         return ticketRepository.findByCustomer_IdOrderByReceivedDateDescIdDesc(customer.getId())
                 .stream()
                 .map(ticket -> new RepairHistoryResponse(
@@ -154,26 +243,28 @@ public class RepairTicketService {
                     "customerId is required when no appointmentId is provided");
         }
         Customer customer = customerRepository.findById(request.getCustomerId())
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy khách hàng"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khách hàng"));
         Employee technician = null;
         if (request.getTechnicianId() != null) {
             technician = employeeRepository.findById(request.getTechnicianId())
-                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy kỹ thuật viên"));
+                    .filter(employee -> "ACTIVE".equals(employee.getStatus()))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Technician does not exist or is inactive"));
         }
         ticket.setCustomer(customer);
         ticket.setDevice(request.getDevice().trim());
         ticket.setReceivedDate(request.getReceivedDate());
-        ticket.setStatus(request.getStatus().trim());
+        ticket.setStatus(request.getStatus().storedValue());
         ticket.setTechnician(technician);
         if (request.getServiceId() != null) {
             ticket.setService(serviceItemRepository.findById(request.getServiceId())
-                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dịch vụ")));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy dịch vụ")));
         }
     }
 
     private RepairTicket findTicket(Long id) {
         return ticketRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu sửa chữa"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu sửa chữa"));
     }
 
     private boolean isAssignedTo(RepairTicket ticket, String email) {

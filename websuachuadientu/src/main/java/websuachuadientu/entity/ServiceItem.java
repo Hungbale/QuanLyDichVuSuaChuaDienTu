@@ -26,7 +26,7 @@ public class ServiceItem {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    @Column(nullable = false, precision = 15, scale = 0)
+    @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal price;
 
     @Column(columnDefinition = "TEXT")
