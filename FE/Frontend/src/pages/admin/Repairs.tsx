@@ -4,6 +4,7 @@ import { assignAppointmentApi, createAppointmentApi, getAppointmentCancellationR
 import { getCustomersApi } from "../../api/customerApi";
 import { getEmployeesApi } from "../../api/employeeApi";
 import AppointmentForm from "../../components/common/AppointmentForm";
+import RepairSprint8, { type RepairSprint8Section } from "./RepairSprint8";
 import { getServicesApi } from "../../api/serviceApi";
 import { createRepairIntakeApi, getRepairIntakeApi } from "../../api/repairIntakeApi";
 import { getRepairDiagnosisApi } from "../../api/repairDiagnosisApi";
@@ -24,7 +25,7 @@ import type { RepairPayment } from "../../types/repairPayment";
 import type { RepairTrackingDetails } from "../../types/repairTracking";
 import type { ServiceItem } from "../../types/service";
 
-type RepairsTab = "appointments" | "intakes" | "repairs";
+type RepairsTab = "appointments" | "intakes" | "repairs" | RepairSprint8Section;
 type PeriodTab = "current" | "past";
 type TicketForm = { customerId: string; device: string; receivedDate: string; status: string; technicianId: string };
 type IntakeForm = { serialNumber: string; appearanceCondition: string; includedAccessories: string; customerReportedIssue: string; intakeNote: string };
@@ -112,7 +113,9 @@ function AdminRepairs() {
     const appointmentPeriod = appointments.filter((appointment) => periodTab === "past" ? appointmentIsPast(appointment) : !appointmentIsPast(appointment));
     const intakePeriod = intakeTickets.filter((ticket) => periodTab === "past" ? ticket.status !== "SCHEDULED" && ticket.status !== "Đã lên lịch" : ticket.status === "SCHEDULED" || ticket.status === "Đã lên lịch");
     const repairPeriod = tickets.filter((ticket) => periodTab === "past" ? isTerminalStatus(ticket.status) : !isTerminalStatus(ticket.status));
-    const activeStatusSource = activeTab === "appointments" ? appointmentPeriod.map((item) => item.status) : activeTab === "intakes" ? intakePeriod.map((item) => item.status) : repairPeriod.map((item) => item.status);
+    const sprint8Sections: RepairSprint8Section[] = ["billing", "reviews", "warranty"];
+    const isSprint8Tab = sprint8Sections.includes(activeTab as RepairSprint8Section);
+    const activeStatusSource = activeTab === "appointments" ? appointmentPeriod.map((item) => item.status) : activeTab === "intakes" ? intakePeriod.map((item) => item.status) : activeTab === "repairs" ? repairPeriod.map((item) => item.status) : [];
     const statusOptions = [...new Set(activeStatusSource)];
     const visibleAppointments = appointmentPeriod.filter((item) => statusFilter === "ALL" || item.status === statusFilter)
         .sort((a, b) => `${b.appointmentDate}T${b.appointmentTime}`.localeCompare(`${a.appointmentDate}T${a.appointmentTime}`));
@@ -352,7 +355,12 @@ function AdminRepairs() {
                 <button type="button" role="tab" aria-selected={activeTab === "appointments"} className={activeTab === "appointments" ? "repair-management-tab active" : "repair-management-tab"} onClick={() => { setActiveTab("appointments"); setStatusFilter("ALL"); setError(""); setNotice(""); }}>Lịch đặt của khách</button>
                 <button type="button" role="tab" aria-selected={activeTab === "intakes"} className={activeTab === "intakes" ? "repair-management-tab active" : "repair-management-tab"} onClick={() => { setActiveTab("intakes"); setStatusFilter("ALL"); setError(""); setNotice(""); }}>Phiếu tiếp nhận</button>
                 <button type="button" role="tab" aria-selected={activeTab === "repairs"} className={activeTab === "repairs" ? "repair-management-tab active" : "repair-management-tab"} onClick={() => { setActiveTab("repairs"); setStatusFilter("ALL"); setError(""); setNotice(""); }}>Phiếu sửa chữa</button>
+                {(["billing", "reviews", "warranty"] as RepairSprint8Section[]).map((section) => {
+                    const labels: Record<RepairSprint8Section, string> = { billing: "Báo giá & thanh toán", reviews: "Đánh giá dịch vụ", warranty: "Bảo hành" };
+                    return <button key={section} type="button" role="tab" aria-selected={activeTab === section} className={activeTab === section ? "repair-management-tab active" : "repair-management-tab"} onClick={() => { setActiveTab(section); setStatusFilter("ALL"); setError(""); setNotice(""); }}>{labels[section]}</button>;
+                })}
             </div>
+            {isSprint8Tab ? <RepairSprint8 key={activeTab} section={activeTab as RepairSprint8Section} /> : <>
             <div className="appointment-tabs" role="tablist" aria-label="Phân loại dữ liệu sửa chữa"><button className={periodTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={periodTab === "current"} onClick={() => { setPeriodTab("current"); setStatusFilter("ALL"); }}>Hiện tại <span>{activeTab === "appointments" ? appointments.filter((item) => !appointmentIsPast(item)).length : activeTab === "intakes" ? intakeTickets.filter((item) => item.status === "SCHEDULED" || item.status === "Đã lên lịch").length : tickets.filter((item) => !isTerminalStatus(item.status)).length}</span></button><button className={periodTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={periodTab === "past"} onClick={() => { setPeriodTab("past"); setStatusFilter("ALL"); }}>Đã qua <span>{activeTab === "appointments" ? appointments.filter(appointmentIsPast).length : activeTab === "intakes" ? intakeTickets.filter((item) => item.status !== "SCHEDULED" && item.status !== "Đã lên lịch").length : tickets.filter((item) => isTerminalStatus(item.status)).length}</span></button></div>
             <div className="appointment-filter-row"><label htmlFor="admin-repair-status-filter">Lọc trạng thái</label><select id="admin-repair-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{statusOptions.map((status) => <option key={status} value={status}>{translateStatus(status)}</option>)}</select></div>
 
@@ -424,6 +432,7 @@ function AdminRepairs() {
                 </section>
             )}
 
+            </>}
             {viewingTicket && <div className="modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingTicket(null); }}><section className="modal customer-modal" role="dialog" aria-modal="true" aria-labelledby="admin-repair-detail-title"><div className="modal-header"><div><h2 id="admin-repair-detail-title">Chi tiết phiếu {viewingTicket.ticketCode}</h2><p>{viewingTicket.customerName} · {viewingTicket.device}</p></div><button className="modal-close" type="button" aria-label="Đóng" onClick={() => setViewingTicket(null)}>×</button></div>
                 {ticketDetailsLoading ? <div className="table-state">Đang tải chi tiết phiếu...</div> : <>
                     <div className="appointment-details-grid"><div><span>Khách hàng</span><strong>{viewingTicket.customerName} · KH#{viewingTicket.customerId}</strong></div><div><span>Kỹ thuật viên</span><strong>{viewingTicket.technicianName || "Chưa phân công"}</strong></div><div><span>Thiết bị</span><strong>{viewingTicket.device}</strong></div><div><span>Ngày nhận phiếu</span><strong>{new Date(`${viewingTicket.receivedDate}T00:00:00`).toLocaleDateString("vi-VN")}</strong></div><div><span>Trạng thái</span><strong>{translateStatus(viewingTicket.status)}</strong></div></div>

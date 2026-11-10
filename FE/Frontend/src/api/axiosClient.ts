@@ -2,7 +2,7 @@ import axios from "axios";
 import { translateApiError, translateFieldError, translateValidationError } from "../utils/apiErrorMessage";
 
 const axiosClient = axios.create({
-    baseURL: import.meta.env.VITE_API_URL,
+    baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080",
     headers: {
         "Content-Type": "application/json",
     },
