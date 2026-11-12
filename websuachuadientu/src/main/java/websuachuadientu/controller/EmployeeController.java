@@ -9,7 +9,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import websuachuadientu.dto.EmployeeRequest;
 import websuachuadientu.dto.EmployeeProfileUpdateRequest;
-import websuachuadientu.dto.StatusRequest;
 import websuachuadientu.entity.Employee;
 import websuachuadientu.service.EmployeeService;
 
@@ -74,11 +73,10 @@ public class EmployeeController {
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<Employee> changeStatus(
-            @PathVariable Long id,
-            @Valid @RequestBody StatusRequest request) {
+            @PathVariable Long id) {
 
         return ResponseEntity.ok(
-                employeeService.changeStatus(id, request.status())
+                employeeService.changeStatus(id)
         );
     }
 

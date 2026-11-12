@@ -38,12 +38,12 @@ function Login() {
         // =========================
 
         if (!emailValue) {
-            setError("Vui lòng nhập địa chỉ thư điện tử.");
+            setError("Vui lòng nhập email.");
             return;
         }
 
         if (!emailRegex.test(emailValue)) {
-            setError("Địa chỉ thư điện tử không đúng định dạng. Vui lòng nhập lại.");
+            setError("Email không đúng định dạng. Vui lòng nhập lại.");
             return;
         }
 
@@ -92,7 +92,7 @@ function Login() {
                 setError(message);
             } else {
                 setError(
-                    "Địa chỉ thư điện tử hoặc mật khẩu không chính xác."
+                    "Email hoặc mật khẩu không chính xác."
                 );
             }
         } finally {
@@ -142,7 +142,7 @@ function Login() {
                         <div className="auth-form-group">
 
                             <label htmlFor="email">
-                                Địa chỉ thư điện tử
+                                Email
                             </label>
 
                             <div className="auth-input-wrapper">
@@ -260,7 +260,7 @@ function Login() {
                 </div>
 
                 <div className="auth-copyright">
-                    © 2026 FIXHUB. Bảo lưu mọi quyền.
+                    © 2026 FIXHUB. All rights reserved.
                 </div>
 
             </div>

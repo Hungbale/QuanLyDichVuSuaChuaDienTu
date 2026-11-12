@@ -6,9 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.security.core.Authentication;
 import websuachuadientu.dto.CategoryRequest;
-import websuachuadientu.dto.StatusRequest;
 import websuachuadientu.entity.Category;
 import websuachuadientu.service.CategoryService;
 
@@ -24,20 +22,19 @@ public class CategoryController {
 
     @GetMapping
     public ResponseEntity<List<Category>> getAll(
-            @RequestParam(required = false) String status,
-            Authentication authentication) {
+            @RequestParam(required = false) String status) {
 
         return ResponseEntity.ok(
-                categoryService.getAll(status, isAdmin(authentication))
+                categoryService.getAll(status)
         );
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Category> getById(
-            @PathVariable Long id, Authentication authentication) {
+            @PathVariable Long id) {
 
         return ResponseEntity.ok(
-                categoryService.getById(id, isAdmin(authentication))
+                categoryService.getById(id)
         );
     }
 
@@ -62,11 +59,10 @@ public class CategoryController {
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<Category> changeStatus(
-            @PathVariable Long id,
-            @Valid @RequestBody StatusRequest request) {
+            @PathVariable Long id) {
 
         return ResponseEntity.ok(
-                categoryService.changeStatus(id, request.status())
+                categoryService.changeStatus(id)
         );
     }
 
@@ -77,10 +73,5 @@ public class CategoryController {
         categoryService.delete(id);
 
         return ResponseEntity.noContent().build();
-    }
-
-    private boolean isAdmin(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 }

@@ -13,12 +13,6 @@ import websuachuadientu.entity.RepairQuoteItem;
 import websuachuadientu.entity.RepairTicket;
 import websuachuadientu.repository.RepairQuoteRepository;
 import websuachuadientu.repository.RepairTicketRepository;
-import websuachuadientu.repository.RepairDiagnosisRepository;
-import websuachuadientu.repository.RepairTicketActivityRepository;
-import websuachuadientu.repository.EmployeeRepository;
-import websuachuadientu.entity.RepairTicketActivity;
-import websuachuadientu.enums.RepairQuoteDecision;
-import websuachuadientu.enums.RepairTicketStatus;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -28,23 +22,15 @@ import java.util.List;
 public class RepairQuoteService {
     private final RepairQuoteRepository quoteRepository;
     private final RepairTicketRepository ticketRepository;
-    private final RepairDiagnosisRepository diagnosisRepository;
-    private final RepairTicketActivityRepository activityRepository;
-    private final EmployeeRepository employeeRepository;
 
     @Transactional
     public RepairQuoteResponse create(Long ticketId, RepairQuoteRequest request, String email, boolean admin) {
         RepairTicket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu sửa chữa"));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu sửa chữa"));
         ensureAssignedEmployee(ticket, email, admin);
-        if (diagnosisRepository.findByRepairTicket_Id(ticketId).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Record the repair diagnosis before creating a quote");
-        }
         if (quoteRepository.existsByRepairTicket_Id(ticketId)) {
             throw new IllegalStateException("Phiếu sửa chữa đã có báo giá");
         }
-        transitionTicket(ticket, RepairTicketStatus.WAITING_FOR_QUOTE_APPROVAL);
 
         RepairQuote quote = new RepairQuote();
         quote.setRepairTicket(ticket);
@@ -52,17 +38,15 @@ public class RepairQuoteService {
         replaceItemsAndTotal(quote, request.items());
         quote = quoteRepository.save(quote);
         quote.setQuoteCode("BG%06d".formatted(quote.getId()));
+        ticket.setStatus("Chờ xác nhận báo giá");
         ticketRepository.save(ticket);
-        saveActivity(ticket, employeeRepository.findByUser_Email(email).orElse(null),
-                "QUOTE_CREATED", "Báo giá " + quote.getQuoteCode() + " đã được gửi. Tổng tiền: "
-                        + quote.getTotalAmount());
         return toResponse(quoteRepository.save(quote));
     }
 
     @Transactional(readOnly = true)
     public RepairQuoteResponse getByTicketId(Long ticketId, String email, boolean admin) {
         RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Phiếu sửa chữa chưa có báo giá"));
+                .orElseThrow(() -> new IllegalArgumentException("Phiếu sửa chữa chưa có báo giá"));
         ensureAssignedEmployee(quote.getRepairTicket(), email, admin);
         return toResponse(quote);
     }
@@ -70,55 +54,33 @@ public class RepairQuoteService {
     @Transactional(readOnly = true)
     public RepairQuoteResponse getByTicketIdForCustomer(Long ticketId, String email) {
         RepairQuote quote = quoteRepository.findByRepairTicket_Id(ticketId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Phiếu sửa chữa chưa có báo giá"));
+                .orElseThrow(() -> new IllegalArgumentException("Phiếu sửa chữa chưa có báo giá"));
         ensureCustomerOwns(quote.getRepairTicket(), email);
         return toResponse(quote);
     }
 
     @Transactional
-    public RepairQuoteResponse decide(Long quoteId, RepairQuoteDecision decision, String email, boolean admin) {
+    public RepairQuoteResponse decide(Long quoteId, String decision, String email, boolean admin) {
         RepairQuote quote = findQuote(quoteId);
         ensureAssignedEmployee(quote.getRepairTicket(), email, admin);
         if (!"SENT".equals(quote.getStatus())) {
             throw new IllegalStateException("Báo giá không còn ở trạng thái chờ xác nhận");
         }
-        quote.setStatus(decision.name());
-        transitionTicket(quote.getRepairTicket(), decision == RepairQuoteDecision.ACCEPTED
-                ? RepairTicketStatus.REPAIRING : RepairTicketStatus.CUSTOMER_DECLINED);
-        saveDecisionActivity(quote, decision);
+        quote.setStatus(decision);
+        quote.getRepairTicket().setStatus("ACCEPTED".equals(decision) ? "Đang sửa" : "Khách từ chối");
         return toResponse(quoteRepository.save(quote));
     }
 
     @Transactional
-    public RepairQuoteResponse decideForCustomer(Long quoteId, RepairQuoteDecision decision, String email) {
+    public RepairQuoteResponse decideForCustomer(Long quoteId, String decision, String email) {
         RepairQuote quote = findQuote(quoteId);
         ensureCustomerOwns(quote.getRepairTicket(), email);
         if (!"SENT".equals(quote.getStatus())) {
             throw new IllegalStateException("Báo giá không còn ở trạng thái chờ xác nhận");
         }
-        quote.setStatus(decision.name());
-        transitionTicket(quote.getRepairTicket(), decision == RepairQuoteDecision.ACCEPTED
-                ? RepairTicketStatus.REPAIRING : RepairTicketStatus.CUSTOMER_DECLINED);
-        saveDecisionActivity(quote, decision);
+        quote.setStatus(decision);
+        quote.getRepairTicket().setStatus("ACCEPTED".equals(decision) ? "Đang sửa" : "Khách từ chối");
         return toResponse(quoteRepository.save(quote));
-    }
-
-    private void saveDecisionActivity(RepairQuote quote, RepairQuoteDecision decision) {
-        String action = decision == RepairQuoteDecision.ACCEPTED
-                ? "CUSTOMER_QUOTE_ACCEPTED" : "CUSTOMER_QUOTE_DECLINED";
-        saveActivity(quote.getRepairTicket(), null, action,
-                "Khách hàng " + (decision == RepairQuoteDecision.ACCEPTED ? "đã xác nhận" : "đã từ chối")
-                        + " báo giá " + quote.getQuoteCode() + ". Tổng tiền: " + quote.getTotalAmount());
-    }
-
-    private void saveActivity(RepairTicket ticket, websuachuadientu.entity.Employee employee,
-                              String action, String details) {
-        RepairTicketActivity activity = new RepairTicketActivity();
-        activity.setRepairTicket(ticket);
-        activity.setEmployee(employee);
-        activity.setAction(action);
-        activity.setDetails(details);
-        activityRepository.save(activity);
     }
 
     private void ensureCustomerOwns(RepairTicket ticket, String email) {
@@ -126,21 +88,6 @@ public class RepairQuoteService {
                 || !ticket.getCustomer().getUser().getEmail().equalsIgnoreCase(email)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bạn không có quyền truy cập dữ liệu này");
         }
-    }
-
-    private void transitionTicket(RepairTicket ticket, RepairTicketStatus nextStatus) {
-        RepairTicketStatus currentStatus;
-        try {
-            currentStatus = RepairTicketStatus.fromValue(ticket.getStatus());
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Current ticket status must be reviewed before it can be changed", exception);
-        }
-        if (currentStatus == null || !currentStatus.canTransitionTo(nextStatus)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Repair ticket status transition is not allowed");
-        }
-        ticket.setStatus(nextStatus.storedValue());
     }
 
     private void ensureAssignedEmployee(RepairTicket ticket, String email, boolean admin) {
@@ -153,25 +100,18 @@ public class RepairQuoteService {
 
     private RepairQuote findQuote(Long id) {
         return quoteRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy báo giá"));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy báo giá"));
     }
 
     private void replaceItemsAndTotal(RepairQuote quote, List<RepairQuoteItemRequest> requests) {
         BigDecimal total = BigDecimal.ZERO;
-        BigDecimal maximumAmount = new BigDecimal("999999999999.99");
         for (RepairQuoteItemRequest request : requests) {
-            BigDecimal lineTotal = request.unitPrice().multiply(BigDecimal.valueOf(request.quantity()));
-            if (lineTotal.compareTo(maximumAmount) > 0
-                    || total.add(lineTotal).compareTo(maximumAmount) > 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Quote item and total amounts must fit within the supported 14-digit currency range");
-            }
             RepairQuoteItem item = new RepairQuoteItem();
             item.setQuote(quote);
             item.setName(request.name().trim());
             item.setQuantity(request.quantity());
             item.setUnitPrice(request.unitPrice());
-            item.setLineTotal(lineTotal);
+            item.setLineTotal(request.unitPrice().multiply(BigDecimal.valueOf(request.quantity())));
             quote.getItems().add(item);
             total = total.add(item.getLineTotal());
         }

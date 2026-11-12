@@ -1,34 +1,42 @@
 package websuachuadientu.security;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import websuachuadientu.entity.RevokedToken;
-import websuachuadientu.repository.RevokedTokenRepository;
 
 import java.util.Date;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-@RequiredArgsConstructor
 public class TokenBlacklistService {
-    private final RevokedTokenRepository repository;
 
-    @Transactional
+    private final Map<String, Long> blacklist = new ConcurrentHashMap<>();
+
     public void blacklist(String jti, Date expiration) {
         if (jti == null || expiration == null) {
             return;
         }
-        Date now = new Date();
-        repository.deleteByExpiresAtBefore(now);
-        if (expiration.after(now)) {
-            RevokedToken token = new RevokedToken();
-            token.setId(jti);
-            token.setExpiresAt(expiration);
-            repository.save(token);
-        }
+        cleanup();
+        blacklist.put(jti, expiration.getTime());
     }
 
     public boolean isBlacklisted(String jti) {
-        return jti != null && repository.existsByIdAndExpiresAtAfter(jti, new Date());
+        if (jti == null) {
+            return false;
+        }
+        cleanup();
+        Long expiry = blacklist.get(jti);
+        if (expiry == null) {
+            return false;
+        }
+        if (expiry < System.currentTimeMillis()) {
+            blacklist.remove(jti);
+            return false;
+        }
+        return true;
+    }
+
+    private void cleanup() {
+        long now = System.currentTimeMillis();
+        blacklist.entrySet().removeIf(entry -> entry.getValue() < now);
     }
 }

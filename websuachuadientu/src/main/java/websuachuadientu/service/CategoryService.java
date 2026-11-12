@@ -1,10 +1,8 @@
 package websuachuadientu.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import websuachuadientu.dto.CategoryRequest;
 import websuachuadientu.entity.Category;
 import websuachuadientu.repository.CategoryRepository;
@@ -19,8 +17,7 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
     private final ServiceItemRepository serviceItemRepository;
 
-    public List<Category> getAll(String status, boolean admin) {
-        if (!admin) return categoryRepository.findByStatus("ACTIVE");
+    public List<Category> getAll(String status) {
 
         if (status == null || status.isBlank()) {
             return categoryRepository.findAll();
@@ -29,26 +26,18 @@ public class CategoryService {
         return categoryRepository.findByStatus(status);
     }
 
-    public Category getById(Long id, boolean admin) {
-        Category category = getById(id);
-        if (!admin && !"ACTIVE".equals(category.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "KhĂ´ng tĂ¬m tháº¥y danh má»¥c");
-        }
-        return category;
-    }
-
     public Category getById(Long id) {
 
         return categoryRepository.findById(id)
                 .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy danh mục"));
+                        new RuntimeException("Không tìm thấy danh mục"));
     }
 
     @Transactional
     public Category create(CategoryRequest request) {
 
         if (categoryRepository.existsByNameIgnoreCase(request.getName().trim())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Tên danh mục đã tồn tại");
+            throw new RuntimeException("Tên danh mục đã tồn tại");
         }
 
         Category category = new Category();
@@ -66,7 +55,7 @@ public class CategoryService {
 
         if (!category.getName().equalsIgnoreCase(newName)
                 && categoryRepository.existsByNameIgnoreCase(newName)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Tên danh mục đã tồn tại");
+            throw new RuntimeException("Tên danh mục đã tồn tại");
         }
 
         category.setName(newName);
@@ -75,12 +64,16 @@ public class CategoryService {
     }
 
     @Transactional
-    public Category changeStatus(Long id, String status) {
+    public Category changeStatus(Long id) {
+
         Category category = getById(id);
-        if (!"ACTIVE".equals(status) && !"INACTIVE".equals(status)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category status must be ACTIVE or INACTIVE");
+
+        if ("ACTIVE".equals(category.getStatus())) {
+            category.setStatus("INACTIVE");
+        } else {
+            category.setStatus("ACTIVE");
         }
-        category.setStatus(status);
+
         return categoryRepository.save(category);
     }
 
@@ -90,7 +83,7 @@ public class CategoryService {
         Category category = getById(id);
 
         if (serviceItemRepository.existsByCategoryId(id)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
+            throw new RuntimeException(
                     "Không thể xóa danh mục đang được sử dụng bởi dịch vụ");
         }
 

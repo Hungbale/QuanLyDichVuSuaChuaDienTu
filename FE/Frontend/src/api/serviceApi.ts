@@ -57,12 +57,10 @@ export const updateServiceApi = async (
 };
 
 export const changeServiceStatusApi = async (
-    id: number,
-    status: "ACTIVE" | "INACTIVE"
+    id: number
 ): Promise<ServiceItem> => {
     const response = await axiosClient.patch<ServiceItem>(
-        `/api/services/${id}/status`,
-        { status }
+        `/api/services/${id}/status`
     );
 
     return response.data;

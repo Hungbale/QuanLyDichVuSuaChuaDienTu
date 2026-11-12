@@ -7,7 +7,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
-import websuachuadientu.enums.RepairTicketStatus;
 
 @Getter
 @Setter
@@ -21,11 +20,9 @@ public class RepairTicketRequest {
     @NotNull
     private LocalDate receivedDate;
 
-    @NotNull
-    private RepairTicketStatus status;
-
-    @Size(max = 2000)
-    private String note;
+    @NotBlank
+    @Size(max = 50)
+    private String status;
 
     private Long technicianId;
 
