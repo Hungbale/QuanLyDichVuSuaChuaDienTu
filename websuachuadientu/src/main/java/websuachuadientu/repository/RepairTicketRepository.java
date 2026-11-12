@@ -21,10 +21,6 @@ public interface RepairTicketRepository extends JpaRepository<RepairTicket, Long
             """)
     List<RepairTicket> search(@Param("keyword") String keyword);
 
-    Optional<RepairTicket> findByTicketCode(String ticketCode);
-
-    Optional<RepairTicket> findByTicketCodeIgnoreCase(String ticketCode);
-
     List<RepairTicket> findByCustomer_IdOrderByReceivedDateDescIdDesc(Long customerId);
 
     long countByTechnician_IdAndStatusNotIn(Long technicianId, List<String> terminalStatuses);
