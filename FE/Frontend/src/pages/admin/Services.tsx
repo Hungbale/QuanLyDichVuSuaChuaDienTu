@@ -5,7 +5,6 @@ import {
     changeCategoryStatusApi,
     createCategoryApi,
     deleteCategoryApi,
-    getCategoryByIdApi,
     getCategoriesApi,
     updateCategoryApi,
 } from "../../api/categoryApi";
@@ -62,10 +61,10 @@ function AdminServices() {
         useState<ServiceItem | null>(null);
 
     const [serviceForm, setServiceForm] =
-        useState<Omit<ServiceItemRequest, "price"> & { price: string }>({
+        useState<ServiceItemRequest>({
             name: "",
             categoryId: 0,
-            price: "",
+            price: 0,
             description: "",
         });
 
@@ -144,7 +143,7 @@ function AdminServices() {
         setServiceForm({
             name: "",
             categoryId: 0,
-            price: "",
+            price: 0,
             description: "",
         });
 
@@ -168,7 +167,7 @@ function AdminServices() {
         setServiceForm({
             name: service.name,
             categoryId: service.category.id,
-            price: String(service.price),
+            price: service.price,
             description: service.description || "",
         });
 
@@ -232,7 +231,7 @@ function AdminServices() {
             return;
         }
 
-        if (Number(serviceForm.price) < 0) {
+        if (serviceForm.price < 0) {
             setError("Giá dịch vụ không được âm.");
             return;
         }
@@ -302,8 +301,7 @@ function AdminServices() {
             setSuccess("");
 
             await changeServiceStatusApi(
-                service.id,
-                service.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"
+                service.id
             );
 
             setSuccess(
@@ -371,19 +369,16 @@ function AdminServices() {
         setShowCategoryModal(true);
     };
 
-    const openEditCategoryModal = async (
+    const openEditCategoryModal = (
         category: Category
     ) => {
+        setEditingCategory(category);
+        setCategoryName(category.name);
+
         setError("");
         setSuccess("");
-        try {
-            const latestCategory = await getCategoryByIdApi(category.id);
-            setEditingCategory(latestCategory);
-            setCategoryName(latestCategory.name);
-            setShowCategoryModal(true);
-        } catch (error: any) {
-            setError(error.response?.data?.message || "Không thể tải chi tiết danh mục.");
-        }
+
+        setShowCategoryModal(true);
     };
 
     const closeCategoryModal = () => {
@@ -474,19 +469,8 @@ function AdminServices() {
             setError("");
             setSuccess("");
 
-            const nextStatus = category.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-            if (nextStatus === "INACTIVE") {
-                const categoryServices = await getServicesApi({ categoryId: category.id });
-                await Promise.all(
-                    categoryServices
-                        .filter((service) => service.status === "ACTIVE")
-                        .map((service) => changeServiceStatusApi(service.id, "INACTIVE"))
-                );
-            }
-
             await changeCategoryStatusApi(
-                category.id,
-                nextStatus
+                category.id
             );
 
             setSuccess(
@@ -1187,8 +1171,6 @@ function AdminServices() {
                                 <input
                                     type="number"
                                     min="0"
-                                    step="any"
-                                    placeholder="Nhập giá dịch vụ"
                                     value={
                                         serviceForm.price
                                     }
@@ -1196,7 +1178,11 @@ function AdminServices() {
                                         setServiceForm(
                                             {
                                                 ...serviceForm,
-                                                price: event.target.value,
+                                                price: Number(
+                                                    event
+                                                        .target
+                                                        .value
+                                                ),
                                             }
                                         )
                                     }

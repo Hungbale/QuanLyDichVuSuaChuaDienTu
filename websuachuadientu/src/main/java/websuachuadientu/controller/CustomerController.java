@@ -8,7 +8,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import websuachuadientu.dto.CustomerRequest;
-import websuachuadientu.dto.StatusRequest;
 import websuachuadientu.entity.Customer;
 import websuachuadientu.service.CustomerService;
 
@@ -74,11 +73,10 @@ public class CustomerController {
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<Customer> changeStatus(
-            @PathVariable Long id,
-            @Valid @RequestBody StatusRequest request) {
+            @PathVariable Long id) {
 
         return ResponseEntity.ok(
-                customerService.changeStatus(id, request.status())
+                customerService.changeStatus(id)
         );
     }
 }

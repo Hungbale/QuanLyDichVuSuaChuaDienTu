@@ -42,12 +42,9 @@ function BookAppointment() {
         setSubmitting(true);
         setError("");
         try {
-            const appointment = await createAppointmentApi(values);
-            const assignedTechnician = appointment.technician?.fullName;
+            await createAppointmentApi(values);
             navigate("/customer/appointments", {
-                state: { success: assignedTechnician
-                    ? `Đặt lịch thành công. Lịch đã được xác nhận và phân công cho kỹ thuật viên ${assignedTechnician}.`
-                    : "Đặt lịch thành công. Hệ thống đã tiếp nhận yêu cầu của bạn." },
+                state: { success: "Đặt lịch thành công. Bạn có thể theo dõi lịch hẹn tại đây." },
             });
         } catch (requestError: any) {
             setError(
@@ -108,7 +105,6 @@ function BookAppointment() {
                         initialValues={initialValues}
                         submitting={submitting}
                         submitLabel="Gửi yêu cầu đặt lịch"
-                        blockUnavailableSlot
                         onSubmit={handleSubmit}
                     />
                 )}

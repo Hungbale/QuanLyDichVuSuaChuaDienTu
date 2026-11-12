@@ -249,7 +249,7 @@ function EditProfile() {
                                 {/* EMAIL */}
                                 <div className="form-group">
                                     <label htmlFor="email">
-                                        Địa chỉ thư điện tử
+                                        Email
                                     </label>
 
                                     <div className="profile-input-wrapper">

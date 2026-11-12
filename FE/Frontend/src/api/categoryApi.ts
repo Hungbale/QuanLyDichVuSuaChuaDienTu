@@ -51,12 +51,10 @@ export const updateCategoryApi = async (
 };
 
 export const changeCategoryStatusApi = async (
-    id: number,
-    status: "ACTIVE" | "INACTIVE"
+    id: number
 ): Promise<Category> => {
     const response = await axiosClient.patch<Category>(
-        `/api/categories/${id}/status`,
-        { status }
+        `/api/categories/${id}/status`
     );
 
     return response.data;

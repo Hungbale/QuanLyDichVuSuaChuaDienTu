@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
     CalendarDays,
@@ -71,17 +71,7 @@ const roleMenus = {
 };
 
 function Sidebar({ role, email, onLogout }: SidebarProps) {
-    const [collapsed, setCollapsed] = useState(() =>
-        typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches,
-    );
-
-    useEffect(() => {
-        const mobileQuery = window.matchMedia("(max-width: 700px)");
-        const updateForViewport = (event: MediaQueryListEvent) => setCollapsed(event.matches);
-
-        mobileQuery.addEventListener("change", updateForViewport);
-        return () => mobileQuery.removeEventListener("change", updateForViewport);
-    }, []);
+    const [collapsed, setCollapsed] = useState(false);
 
     return (
         <aside className={`sidebar${collapsed ? " sidebar-collapsed" : ""}`}>
@@ -112,7 +102,6 @@ function Sidebar({ role, email, onLogout }: SidebarProps) {
                         className={({ isActive }) =>
                             isActive ? "menu-item active" : "menu-item"
                         }
-                        aria-label={label}
                         title={collapsed ? label : undefined}
                     >
                         <Icon size={18} aria-hidden="true" />
@@ -121,7 +110,7 @@ function Sidebar({ role, email, onLogout }: SidebarProps) {
                 ))}
             </nav>
 
-            <button className="logout-button" onClick={onLogout} aria-label="Đăng xuất" title="Đăng xuất">
+            <button className="logout-button" onClick={onLogout}>
                 <LogOut size={18} aria-hidden="true" />
                 <span className="logout-label">Đăng xuất</span>
             </button>
