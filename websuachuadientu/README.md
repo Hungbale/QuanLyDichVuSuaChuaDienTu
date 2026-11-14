@@ -1,156 +1,96 @@
-﻿# Hướng dẫn Postman: Đánh giá dịch vụ và Bảo hành
+﻿# API báo cáo thống kê
 
-Tài liệu này chỉ hướng dẫn kiểm thử API đánh giá dịch vụ và yêu cầu bảo hành.
+Tất cả API trong tài liệu này chỉ dành cho quản trị viên.
 
-## Chuẩn bị Postman
+## Xác thực
 
-Tạo Environment với các biến:
+Đăng nhập bằng tài khoản quản trị viên qua POST /api/auth/login. Gửi token trong header:
 
-| Biến | Giá trị ban đầu |
+    Authorization: Bearer <adminToken>
+
+Base URL mặc định khi chạy local: http://localhost:8080
+
+## Quy tắc chung
+
+- fromDate và toDate là bắt buộc, định dạng yyyy-MM-dd.
+- fromDate phải nhỏ hơn hoặc bằng toDate.
+- toDate không được lớn hơn ngày hiện tại.
+- Khoảng ngày tối đa 366 ngày, tính cả ngày bắt đầu và ngày kết thúc.
+- Lỗi tham số ngày trả 400 Bad Request. Không có quyền Admin trả 403 Forbidden.
+
+Các chỉ tiêu được tính như sau:
+
+| key | Ý nghĩa |
 |---|---|
-| `baseUrl` | `http://localhost:8080` |
-| `customerToken` | Để trống, lấy sau khi đăng nhập khách hàng |
-| `employeeToken` | Để trống, lấy sau khi đăng nhập nhân viên được giao phiếu |
-| `adminToken` | Để trống, lấy sau khi đăng nhập admin |
-| `ticketId` | ID phiếu sửa chữa |
-| `ticketCode` | Mã phiếu, ví dụ `PS00101` |
-| `serviceId` | ID dịch vụ của phiếu |
-| `warrantyRequestId` | ID yêu cầu bảo hành sau khi tạo |
+| appointments | Số lịch hẹn theo ngày hẹn |
+| repairTickets | Số phiếu sửa chữa theo ngày tiếp nhận |
+| completedTickets | Số phiếu hoàn thành theo ngày hoàn thành |
+| revenue | Tổng giao dịch đã thanh toán theo thời điểm thanh toán |
+| averageRating | Điểm đánh giá trung bình trong khoảng ngày, thang 5 |
 
-### Đăng nhập lấy token
+Nếu kỳ chưa có đánh giá, averageRating là null và lý do được ghi trong unavailableMetrics. Breakdown trạng thái phản ánh trạng thái hiện tại của các lịch hẹn và phiếu trong kỳ.
 
-Gọi `POST {{baseUrl}}/api/auth/login`, Body chọn `raw` → `JSON`:
+## 1. Thống kê có so sánh kỳ trước
 
-```json
-{
-  "email": "customer@example.com",
-  "password": "mat-khau"
-}
-```
+GET /api/admin/reports?fromDate=2026-10-01&toDate=2026-10-31
 
-Lấy `token` trong response. Với từng request, chọn tab **Authorization** → **Bearer Token**, nhập token phù hợp với vai trò. Đổi email sang tài khoản nhân viên hoặc admin để lấy token tương ứng.
+Kỳ so sánh là khoảng liền trước có cùng số ngày. Response gồm thông tin hai kỳ, chênh lệch, phần trăm thay đổi và số lượng theo trạng thái.
 
-## 1. Đánh giá dịch vụ
+Ví dụ cấu trúc response:
 
-### Điều kiện
+    {
+      "fromDate": "2026-10-01",
+      "toDate": "2026-10-31",
+      "comparisonFromDate": "2026-08-31",
+      "comparisonToDate": "2026-09-30",
+      "hasData": true,
+      "message": "Báo cáo đã được tổng hợp",
+      "metrics": [
+        {
+          "key": "appointments",
+          "label": "Số lịch hẹn",
+          "currentPeriod": 6,
+          "previousPeriod": 3,
+          "difference": 3,
+          "percentChange": 100
+        }
+      ],
+      "appointmentStatusCounts": {
+        "CONFIRMED": 3
+      },
+      "repairTicketStatusCounts": {
+        "COMPLETED": 2
+      },
+      "unavailableMetrics": []
+    }
 
-- Phiếu sửa chữa phải ở trạng thái `COMPLETED`.
-- Phiếu phải thuộc khách hàng đang đăng nhập.
-- Mỗi phiếu chỉ được đánh giá một lần.
-- Số sao từ 1 đến 5; nhận xét là tùy chọn, tối đa 1.000 ký tự.
+Khi kỳ trước bằng 0, percentChange là null vì không thể tính phần trăm thay đổi.
 
-### Gửi đánh giá
+## 2. Thống kê riêng kỳ đã chọn
 
-Gọi `POST {{baseUrl}}/api/repair-tickets/{{ticketId}}/reviews` bằng Bearer Token khách hàng. Chọn Body → `raw` → `JSON`:
+GET /api/admin/reports/period?fromDate=2026-10-01&toDate=2026-10-31
 
-```json
-{
-  "rating": 5,
-  "comment": "Sửa nhanh, thiết bị hoạt động tốt."
-}
-```
+API này chỉ trả số liệu trong khoảng đã chọn, không có kỳ so sánh. Mỗi phần tử trong metrics có key, label và value.
 
-Thành công trả `201 Created`, gồm `id`, `ticketCode`, `rating`, `comment` và `createdAt`. Lưu `ticketId` của phiếu; ID này khác mã phiếu `ticketCode`.
+Response gồm fromDate, toDate, hasData, message, metrics, appointmentStatusCounts, repairTicketStatusCounts và unavailableMetrics.
 
-### Xem đánh giá
+## 3. Xuất Excel có so sánh
 
-- Khách xem đánh giá của mình: `GET {{baseUrl}}/api/reviews/me` — Bearer Token khách hàng.
-- Xem đánh giá của một phiếu: `GET {{baseUrl}}/api/repair-tickets/{{ticketId}}/reviews` — người dùng đã đăng nhập.
-- Xem đánh giá theo dịch vụ: `GET {{baseUrl}}/api/services/{{serviceId}}/reviews` — người dùng đã đăng nhập.
-- Admin xem tất cả: `GET {{baseUrl}}/api/reviews` — Bearer Token admin.
+GET /api/admin/reports/export/excel?fromDate=2026-10-01&toDate=2026-10-31
 
-### Kiểm tra lỗi
+Response là file XLSX gồm trang tổng quan so sánh hai kỳ và breakdown trạng thái. Trong Postman dùng Send and Download để lưu file.
 
-- Gửi `rating` bằng `0`, `6` hoặc bỏ trống: `400 Bad Request`.
-- Đánh giá phiếu chưa `COMPLETED`: `400 Bad Request`.
-- Dùng khách hàng khác với chủ phiếu: `403 Forbidden`.
-- Đánh giá lại phiếu đã có đánh giá: `409 Conflict`.
+## 4. Xuất Excel riêng kỳ đã chọn
 
-## 2. Gửi yêu cầu bảo hành
+GET /api/admin/reports/period/export/excel?fromDate=2026-10-01&toDate=2026-10-31
 
-### Điều kiện bảo hành hiện tại
+Response là file XLSX chỉ có số liệu của khoảng ngày đã chọn, không có cột hoặc dữ liệu kỳ trước.
 
-- Phiếu phải thuộc khách hàng đang đăng nhập và có trạng thái `COMPLETED`.
-- Backend đang tính thời hạn **30 ngày từ `completedDate`**. Ngày hết hạn vẫn được tính là còn hạn; sau ngày đó API từ chối tạo yêu cầu.
-- Nếu phiếu chưa có `completedDate`, API không thể xác định hạn và từ chối yêu cầu.
-- Mỗi phiếu không thể có yêu cầu khác đang `PENDING` hoặc `APPROVED`.
+## Gọi bằng Postman
 
-### Tạo yêu cầu
+1. Tạo request GET cho một trong các endpoint trên.
+2. Nhập fromDate và toDate trong tab Params.
+3. Chọn Authorization → Bearer Token và nhập token Admin.
+4. Với hai endpoint Excel, chọn Send and Download để tải file XLSX.
 
-Gọi `POST {{baseUrl}}/api/warranty-requests` bằng Bearer Token khách hàng. Chọn Body → `form-data`:
-
-| Key | Type | Bắt buộc | Ví dụ |
-|---|---|---:|---|
-| `ticketCode` | Text | Có | `PS00101` |
-| `reason` | Text | Có | `Máy tự tắt sau khoảng 10 phút sử dụng` |
-| `description` | Text | Không | `Lỗi xuất hiện từ hôm qua` |
-| `attachment` | File | Không | Ảnh JPG/PNG hoặc tài liệu PDF |
-
-Tệp tối đa 5 MB. Postman tự đặt `Content-Type: multipart/form-data`; không tự thêm header này. Thành công trả `201 Created` với trạng thái ban đầu `PENDING`. Lưu `id` trong response vào biến `warrantyRequestId`.
-
-### Khách xem trạng thái và tệp
-
-- Xem các yêu cầu của mình: `GET {{baseUrl}}/api/warranty-requests/me` — Bearer Token khách hàng.
-- Tải tệp đính kèm: `GET {{baseUrl}}/api/warranty-requests/{{warrantyRequestId}}/attachment` — khách sở hữu phiếu, kỹ thuật viên được giao phiếu hoặc admin. Trong Postman chọn **Send and Download** để lưu tệp.
-
-### Nhân viên xem yêu cầu được giao
-
-Dùng Bearer Token kỹ thuật viên được giao phiếu:
-
-- Xem danh sách phiếu mình phụ trách: `GET {{baseUrl}}/api/warranty-requests`.
-- Lọc theo trạng thái: `GET {{baseUrl}}/api/warranty-requests?status=PENDING`.
-- Xem chi tiết một yêu cầu: `GET {{baseUrl}}/api/warranty-requests/{{warrantyRequestId}}`.
-- Xem các yêu cầu theo phiếu: `GET {{baseUrl}}/api/repair-tickets/{{ticketId}}/warranty-requests`.
-
-Nhân viên chỉ xem và xử lý yêu cầu của phiếu được giao cho mình. Admin có thể xem và xử lý tất cả yêu cầu.
-
-### Nhân viên duyệt hoặc từ chối
-
-Gọi `PATCH {{baseUrl}}/api/warranty-requests/{{warrantyRequestId}}/process` bằng Bearer Token kỹ thuật viên được giao hoặc admin. Body chọn `raw` → `JSON`.
-
-Duyệt yêu cầu:
-
-```json
-{
-  "status": "APPROVED",
-  "resolutionNote": "Phiếu còn hạn, tiếp nhận kiểm tra bảo hành."
-}
-```
-
-Từ chối yêu cầu; phải ghi lý do:
-
-```json
-{
-  "status": "REJECTED",
-  "resolutionNote": "Lỗi phát sinh không thuộc phạm vi bảo hành."
-}
-```
-
-Sau khi xử lý bảo hành xong, chuyển yêu cầu đã duyệt sang `COMPLETED`:
-
-```json
-{
-  "status": "COMPLETED",
-  "resolutionNote": "Đã xử lý xong yêu cầu bảo hành."
-}
-```
-
-Các chuyển trạng thái hợp lệ: `PENDING` → `APPROVED` hoặc `REJECTED`; `APPROVED` → `COMPLETED`.
-
-### Kiểm tra lỗi và phân quyền
-
-- Mã phiếu không tồn tại: `404 Not Found`.
-- Phiếu không thuộc khách đang đăng nhập: `403 Forbidden`.
-- Phiếu chưa hoàn thành, hết hạn hoặc yêu cầu đang mở đã tồn tại: API từ chối tạo yêu cầu.
-- Nhân viên không được giao phiếu thử xem chi tiết, tải tệp hoặc xử lý yêu cầu của phiếu đó: `403 Forbidden`.
-- Từ chối nhưng không có `resolutionNote`, hoặc chuyển trạng thái sai luồng: API từ chối cập nhật.
-
-## Luồng Postman đầy đủ
-
-1. Đăng nhập khách, lấy `customerToken`.
-2. Gửi đánh giá cho phiếu `COMPLETED` bằng API tạo đánh giá; xem lại bằng `GET /api/reviews/me`.
-3. Gửi yêu cầu bảo hành với `ticketCode` của phiếu đủ điều kiện; lưu `warrantyRequestId`.
-4. Gọi `GET /api/warranty-requests/me` để xác nhận yêu cầu ở trạng thái `PENDING`.
-5. Đăng nhập kỹ thuật viên được giao phiếu; xem danh sách và tải tệp đính kèm nếu có.
-6. Dùng tài khoản kỹ thuật viên đó duyệt hoặc từ chối. Đăng nhập kỹ thuật viên khác để thử truy cập và xác nhận bị `403`.
-7. Nếu đã duyệt, cập nhật `COMPLETED`; đăng nhập lại khách và xem trạng thái mới.
+Các request báo cáo đều chỉ đọc dữ liệu, không tạo hoặc cập nhật lịch hẹn, phiếu sửa chữa hay thanh toán.
