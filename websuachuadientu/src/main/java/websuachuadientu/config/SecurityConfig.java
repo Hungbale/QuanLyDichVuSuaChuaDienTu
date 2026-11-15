@@ -155,6 +155,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/customers")
                         .hasAnyRole("ADMIN", "EMPLOYEE")
 
+                        .requestMatchers("/api/admin/reports", "/api/admin/reports/**")
+                        .hasRole("ADMIN")
+
                         .requestMatchers("/api/**").hasRole("ADMIN")
 
                         // Mặc định từ chối endpoint chưa được gán quyền.
