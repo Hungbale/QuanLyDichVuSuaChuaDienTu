@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
     changeEmployeeStatusApi,
@@ -57,10 +57,9 @@ function AdminEmployees() {
             setLoading(true);
             setError("");
 
-            const data = await getEmployeesApi({
-                keyword: keyword.trim() || undefined,
-                status: statusFilter || undefined,
-            });
+            // Backend currently supports searching by name and phone only.
+            // Filter the loaded list locally to support code, email and status too.
+            const data = await getEmployeesApi();
 
             setEmployees(data);
         } catch (error: any) {
@@ -78,6 +77,20 @@ function AdminEmployees() {
     useEffect(() => {
         loadEmployees();
     }, []);
+
+    const visibleEmployees = useMemo(() => {
+        const normalizedKeyword = keyword.trim().toLocaleLowerCase("vi-VN");
+        return employees.filter((employee) => {
+            const matchesKeyword = !normalizedKeyword || [
+                employee.employeeCode,
+                employee.fullName,
+                employee.email,
+                employee.user?.email,
+                employee.phone,
+            ].some((value) => value?.toLocaleLowerCase("vi-VN").includes(normalizedKeyword));
+            return matchesKeyword && (!statusFilter || employee.status === statusFilter);
+        });
+    }, [employees, keyword, statusFilter]);
 
     // =========================
     // FORM
@@ -266,7 +279,7 @@ function AdminEmployees() {
             setError("");
             setSuccess("");
 
-            await changeEmployeeStatusApi(employee.id);
+            await changeEmployeeStatusApi(employee.id, employee.status === "ACTIVE" ? "LOCKED" : "ACTIVE");
 
             setSuccess(
                 `${
@@ -429,14 +442,14 @@ function AdminEmployees() {
                         <h2>Danh sách nhân viên</h2>
                         <p>Theo dõi hồ sơ, trạng thái và thao tác quản lý.</p>
                     </div>
-                    <span>{employees.length} nhân viên</span>
+                    <span>{visibleEmployees.length} / {employees.length} nhân viên</span>
                 </div>
                 <div className="table-container">
                 {loading ? (
                     <div className="table-state">
                         Đang tải danh sách nhân viên...
                     </div>
-                ) : employees.length === 0 ? (
+                ) : visibleEmployees.length === 0 ? (
                     <div className="table-state">
                         Không có nhân viên nào.
                     </div>
@@ -455,7 +468,7 @@ function AdminEmployees() {
                         </thead>
 
                         <tbody>
-                            {employees.map((employee) => (
+                            {visibleEmployees.map((employee) => (
                                 <tr key={employee.id}>
                                     <td>
                                         {employee.id}

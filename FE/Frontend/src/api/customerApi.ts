@@ -68,10 +68,12 @@ export const updateCustomerApi = async (
 };
 
 export const changeCustomerStatusApi = async (
-    id: number
+    id: number,
+    status: "ACTIVE" | "LOCKED",
 ): Promise<Customer> => {
     const response = await axiosClient.patch<Customer>(
-        `/api/customers/${id}/status`
+        `/api/customers/${id}/status`,
+        { status },
     );
 
     return response.data;

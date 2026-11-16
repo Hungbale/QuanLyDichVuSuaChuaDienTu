@@ -35,6 +35,9 @@ const knownMessages: Array<[RegExp, string]> = [
     [/category status must be active or inactive/i, "Trạng thái danh mục chỉ được là đang hoạt động hoặc ngừng hoạt động."],
     [/cannot activate a service in an inactive category/i, "Không thể kích hoạt dịch vụ thuộc danh mục đang ngừng hoạt động."],
     [/already in this status/i, "Phiếu hiện đã ở trạng thái này."],
+    [/cannot delete an employee assigned to an appointment or repair ticket/i, "Kh\u00f4ng th\u1ec3 x\u00f3a nh\u00e2n vi\u00ean v\u00ec \u0111ang \u0111\u01b0\u1ee3c ph\u00e2n c\u00f4ng l\u1ecbch h\u1eb9n ho\u1eb7c phi\u1ebfu s\u1eeda ch\u1eefa. H\u00e3y kh\u00f3a t\u00e0i kho\u1ea3n thay v\u00ec x\u00f3a."],
+    [/email already exists/i, "\u0110\u1ecba ch\u1ec9 email \u0111\u00e3 \u0111\u01b0\u1ee3c s\u1eed d\u1ee5ng. Vui l\u00f2ng nh\u1eadp email kh\u00e1c."],
+    [/phone number already exists/i, "S\u1ed1 \u0111i\u1ec7n tho\u1ea1i \u0111\u00e3 \u0111\u01b0\u1ee3c s\u1eed d\u1ee5ng. Vui l\u00f2ng nh\u1eadp s\u1ed1 kh\u00e1c."],
 ];
 
 const statusMessages: Record<number, string> = {

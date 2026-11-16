@@ -2783,6 +2783,20 @@ th {
 
 
 /* Admin employee and customer management */
+.customer-repair-history {
+    margin-top: 24px;
+}
+
+.customer-repair-history h3 {
+    margin: 0 0 12px;
+    color: #3d354b;
+}
+
+.customer-repair-history .appointment-table-container {
+    max-height: 320px;
+    overflow: auto;
+}
+
 .admin-people-page {
     max-width: 1420px;
     margin: 0 auto;

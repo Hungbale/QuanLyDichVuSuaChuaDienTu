@@ -68,10 +68,12 @@ export const updateEmployeeApi = async (
 };
 
 export const changeEmployeeStatusApi = async (
-    id: number
+    id: number,
+    status: "ACTIVE" | "LOCKED",
 ): Promise<Employee> => {
     const response = await axiosClient.patch<Employee>(
-        `/api/employees/${id}/status`
+        `/api/employees/${id}/status`,
+        { status },
     );
 
     return response.data;
