@@ -48,6 +48,8 @@ public interface RepairTicketRepository extends JpaRepository<RepairTicket, Long
 
     List<RepairTicket> findByCustomer_IdOrderByReceivedDateDescIdDesc(Long customerId);
 
+    long countByCustomer_Id(Long customerId);
+
     long countByTechnician_IdAndStatusNotIn(Long technicianId, List<String> terminalStatuses);
 
     boolean existsByAppointment_Id(Long appointmentId);

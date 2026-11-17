@@ -31,7 +31,7 @@ public class ServiceItemService {
         ServiceItem item = getById(id);
         if (!admin && (!"ACTIVE".equals(item.getStatus())
                 || !"ACTIVE".equals(item.getCategory().getStatus()))) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "KhĂ´ng tĂ¬m tháº¥y dá»‹ch vá»¥");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy dịch vụ");
         }
         return item;
     }

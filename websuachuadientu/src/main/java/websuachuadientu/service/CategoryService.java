@@ -32,7 +32,7 @@ public class CategoryService {
     public Category getById(Long id, boolean admin) {
         Category category = getById(id);
         if (!admin && !"ACTIVE".equals(category.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "KhĂ´ng tĂ¬m tháº¥y danh má»¥c");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy danh mục");
         }
         return category;
     }
