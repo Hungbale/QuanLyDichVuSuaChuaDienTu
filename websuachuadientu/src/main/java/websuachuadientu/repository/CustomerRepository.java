@@ -14,6 +14,7 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
         SELECT c FROM Customer c
         WHERE (:keyword IS NULL OR :keyword = ''
                OR LOWER(c.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(c.customerCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR c.phone LIKE CONCAT('%', :keyword, '%')
                OR LOWER(c.user.email) LIKE LOWER(CONCAT('%', :keyword, '%')))
         AND (:status IS NULL OR :status = '' OR c.status = :status)

@@ -10,6 +10,7 @@ import websuachuadientu.dto.CustomerRequest;
 import websuachuadientu.entity.Customer;
 import websuachuadientu.entity.User;
 import websuachuadientu.repository.CustomerRepository;
+import websuachuadientu.repository.RepairTicketRepository;
 import websuachuadientu.repository.UserRepository;
 
 import java.util.List;
@@ -19,25 +20,30 @@ import java.util.List;
 public class CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final RepairTicketRepository repairTicketRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
     public List<Customer> search(String keyword, String status) {
-
-        return customerRepository.search(keyword, status);
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        return customerRepository.search(normalizedKeyword, status).stream()
+                .map(this::refreshRepairCount)
+                .toList();
     }
 
     public Customer getById(Long id) {
 
-        return customerRepository.findById(id)
+        Customer customer = customerRepository.findById(id)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khách hàng"));
+        return refreshRepairCount(customer);
     }
 
     public Customer getByEmail(String email) {
-        return customerRepository.findByUser_Email(email)
+        Customer customer = customerRepository.findByUser_Email(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Không tìm thấy hồ sơ khách hàng"));
+        return refreshRepairCount(customer);
     }
 
     @Transactional
@@ -76,7 +82,7 @@ public class CustomerService {
         customer.setRepairCount(0);
         customer.setStatus("ACTIVE");
 
-        return customerRepository.save(customer);
+        return refreshRepairCount(customerRepository.save(customer));
     }
 
     @Transactional
@@ -115,10 +121,20 @@ public class CustomerService {
     @Transactional
     public Customer changeStatus(Long id, String status) {
         Customer customer = getById(id);
-        if (!"ACTIVE".equals(status) && !"LOCKED".equals(status)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer status must be ACTIVE or LOCKED");
+        if (!isAllowedStatus(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Customer status must be ACTIVE, INACTIVE, or LOCKED");
         }
         customer.setStatus(status);
-        return customerRepository.save(customer);
+        return refreshRepairCount(customerRepository.save(customer));
+    }
+
+    private boolean isAllowedStatus(String status) {
+        return "ACTIVE".equals(status) || "INACTIVE".equals(status) || "LOCKED".equals(status);
+    }
+
+    private Customer refreshRepairCount(Customer customer) {
+        customer.setRepairCount(Math.toIntExact(repairTicketRepository.countByCustomer_Id(customer.getId())));
+        return customer;
     }
 }

@@ -33,11 +33,7 @@ public class EmployeeService {
             return employeeRepository.findAll();
         }
 
-        return employeeRepository
-                .findByFullNameContainingIgnoreCaseOrPhoneContaining(
-                        keyword,
-                        keyword
-                );
+        return employeeRepository.searchByKeyword(keyword.trim());
     }
 
     public Employee getById(Long id) {
@@ -143,8 +139,9 @@ public class EmployeeService {
     @Transactional
     public Employee changeStatus(Long id, String status) {
         Employee employee = getById(id);
-        if (!"ACTIVE".equals(status) && !"LOCKED".equals(status)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee status must be ACTIVE or LOCKED");
+        if (!"ACTIVE".equals(status) && !"INACTIVE".equals(status) && !"LOCKED".equals(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Employee status must be ACTIVE, INACTIVE, or LOCKED");
         }
         employee.setStatus(status);
         return employeeRepository.save(employee);
