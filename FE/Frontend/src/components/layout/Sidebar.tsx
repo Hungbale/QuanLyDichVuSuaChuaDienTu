@@ -26,7 +26,7 @@ type UserRole = "CUSTOMER" | "EMPLOYEE" | "ADMIN";
 interface SidebarProps {
     role: UserRole;
     email?: string;
-    onLogout: () => void;
+    onLogout: () => void | Promise<void>;
 }
 
 const roleLabels: Record<UserRole, string> = {
@@ -83,6 +83,11 @@ function Sidebar({ role, email, onLogout }: SidebarProps) {
         return () => mobileQuery.removeEventListener("change", updateForViewport);
     }, []);
 
+    const handleLogout = async () => {
+        if (!window.confirm("B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n \u0111\u0103ng xu\u1ea5t kh\u00f4ng?")) return;
+        await onLogout();
+    };
+
     return (
         <aside className={`sidebar${collapsed ? " sidebar-collapsed" : ""}`}>
             <div className="sidebar-top">
@@ -121,7 +126,7 @@ function Sidebar({ role, email, onLogout }: SidebarProps) {
                 ))}
             </nav>
 
-            <button className="logout-button" onClick={onLogout} aria-label="Đăng xuất" title="Đăng xuất">
+            <button className="logout-button" onClick={handleLogout} aria-label="Đăng xuất" title="Đăng xuất">
                 <LogOut size={18} aria-hidden="true" />
                 <span className="logout-label">Đăng xuất</span>
             </button>

@@ -58,13 +58,25 @@ function WarrantyRequest() {
         Object.values(groups).forEach((items) => items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
         return groups;
     }, [requests]);
+    const eligibleTickets = useMemo(
+        () => tickets.filter((ticket) => !(requestsByTicket[ticket.ticketId]?.length)),
+        [tickets, requestsByTicket],
+    );
     const openForm = (ticketId: number) => {
-        setActiveTicketId((current) => current === ticketId ? null : ticketId);
+        setActiveTicketId(ticketId);
         setReason("");
         setDescription("");
         setAttachment(null);
         setError("");
         setNotice("");
+    };
+    const closeForm = () => {
+        if (savingId !== null) return;
+        setActiveTicketId(null);
+        setReason("");
+        setDescription("");
+        setAttachment(null);
+        setError("");
     };
 
     const selectAttachment = (file?: File) => {
@@ -117,16 +129,16 @@ function WarrantyRequest() {
 
     return <main className="management-page appointment-page sprint8-page">
         <header className="appointment-page-header"><span className="appointment-eyebrow">FIXHUB · KHÁCH HÀNG</span><h1>Yêu cầu bảo hành</h1><p>Gửi lỗi phát sinh trên phiếu đã hoàn thành và theo dõi kết quả xử lý.</p></header>
-        {error && <div className="error-message" role="alert">{error}</div>}
+        {error && activeTicketId === null && <div className="error-message" role="alert">{error}</div>}
         {notice && <div className="success-message" role="status">{notice}</div>}
         <div className="appointment-tabs" role="tablist" aria-label="Phân loại yêu cầu bảo hành">
-            <button className={activeTab === "eligible" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "eligible"} onClick={() => { setActiveTab("eligible"); setActiveTicketId(null); }}>Phiếu đã hoàn thành <span>{tickets.length}</span></button>
+            <button className={activeTab === "eligible" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "eligible"} onClick={() => { setActiveTab("eligible"); setActiveTicketId(null); }}>Phiếu đã hoàn thành <span>{eligibleTickets.length}</span></button>
             <button className={activeTab === "requests" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "requests"} onClick={() => { setActiveTab("requests"); setActiveTicketId(null); }}>Yêu cầu đã gửi <span>{requests.length}</span></button>
         </div>
         <div className="appointment-results-heading"><div><h2>{activeTab === "eligible" ? "Chọn phiếu cần bảo hành" : "Lịch sử yêu cầu bảo hành"}</h2><p>{loading ? "Đang tải..." : `${activeTab === "eligible" ? tickets.length : requests.length} mục`}</p></div></div>
         {loading ? <div className="appointment-panel table-state">Đang tải phiếu và yêu cầu bảo hành...</div> : activeTab === "eligible" ? tickets.length === 0 ? (
             <div className="appointment-panel appointment-empty-state"><h2>Chưa có phiếu sửa chữa hoàn thành</h2><p>Phiếu đủ điều kiện gửi bảo hành sẽ xuất hiện tại đây.</p></div>
-        ) : <div className="sprint8-card-list">{tickets.map((ticket) => {
+        ) : <div className="sprint8-card-list">{eligibleTickets.map((ticket) => {
             const ticketRequests = requestsByTicket[ticket.ticketId] || [];
             const latest = ticketRequests[0];
             const blocked = ticketRequests.some((request) => isOpenRequest(request.status));
@@ -135,13 +147,19 @@ function WarrantyRequest() {
                     {latest ? <span className={`appointment-status ${latest.status.toLowerCase()}`}>{statusLabel(latest.status)}</span> : <span className="appointment-status completed">Đã hoàn thành</span>}
                 </div>
                 {latest && <div className="warranty-request-summary"><strong>{latest.reason}</strong>{latest.resolutionNote && <p>{latest.resolutionNote}</p>}<small>Gửi lúc {formatDate(latest.createdAt)}</small></div>}
-                <div className="appointment-search-actions">{blocked ? <span className="warranty-open-note">Yêu cầu đang chờ xử lý; chưa thể tạo yêu cầu mới.</span> : <button className="primary-button" type="button" onClick={() => openForm(ticket.ticketId)}>{activeTicketId === ticket.ticketId ? "Đóng biểu mẫu" : "Gửi yêu cầu bảo hành"}</button>}</div>
-                {activeTicketId === ticket.ticketId && <form className="sprint8-warranty-form" onSubmit={(event) => { event.preventDefault(); void submit(ticket); }}>
-                    <div className="appointment-form-group"><label htmlFor={`warranty-reason-${ticket.ticketId}`}>Nội dung lỗi <span aria-hidden="true">*</span></label><textarea id={`warranty-reason-${ticket.ticketId}`} required maxLength={2000} rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Mô tả lỗi cần kiểm tra bảo hành..." /><small>{reason.length}/2000 ký tự</small></div>
-                    <div className="appointment-form-group"><label htmlFor={`warranty-description-${ticket.ticketId}`}>Mô tả chi tiết</label><textarea id={`warranty-description-${ticket.ticketId}`} maxLength={2000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Thời điểm xảy ra, tình trạng thiết bị..." /><small>{description.length}/2000 ký tự</small></div>
-                    <div className="appointment-form-group"><label htmlFor={`warranty-file-${ticket.ticketId}`}>Ảnh hoặc tài liệu minh chứng <span>(không bắt buộc, JPG/PNG/PDF, tối đa 5 MB)</span></label><input id={`warranty-file-${ticket.ticketId}`} type="file" accept="image/jpeg,image/png,application/pdf" onChange={(event) => selectAttachment(event.target.files?.[0])} />{attachment && <small>Đã chọn: {attachment.name}</small>}</div>
-                    <button className="primary-button" type="submit" disabled={savingId === ticket.ticketId}>{savingId === ticket.ticketId ? "Đang gửi..." : "Gửi yêu cầu"}</button>
-                </form>}
+                <div className="appointment-search-actions">{blocked ? <span className="warranty-open-note">Yêu cầu đang chờ xử lý; chưa thể tạo yêu cầu mới.</span> : <button className="primary-button" type="button" onClick={() => openForm(ticket.ticketId)}>Gửi yêu cầu bảo hành</button>}</div>
+                {activeTicketId === ticket.ticketId && <div className="repair-detail-backdrop" role="presentation" onClick={closeForm}>
+                    <section className="appointment-panel repair-detail-dialog sprint8-warranty-dialog" role="dialog" aria-modal="true" aria-labelledby={`warranty-form-title-${ticket.ticketId}`} onClick={(event) => event.stopPropagation()}>
+                        <div className="appointment-card-top"><div><span className="appointment-card-reference">{ticket.ticketCode}</span><h2 id={`warranty-form-title-${ticket.ticketId}`}>Gửi yêu cầu bảo hành</h2><p>{ticket.device}</p></div><button className="secondary-button" type="button" onClick={closeForm} disabled={savingId === ticket.ticketId}>Đóng</button></div>
+                        {error && <div className="error-message" role="alert">{error}</div>}
+                        <form className="sprint8-warranty-form" onSubmit={(event) => { event.preventDefault(); void submit(ticket); }}>
+                            <div className="appointment-form-group"><label htmlFor={`warranty-reason-${ticket.ticketId}`}>Nội dung lỗi <span aria-hidden="true">*</span></label><textarea id={`warranty-reason-${ticket.ticketId}`} required maxLength={2000} rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Mô tả lỗi cần kiểm tra bảo hành..." /><small>{reason.length}/2000 ký tự</small></div>
+                            <div className="appointment-form-group"><label htmlFor={`warranty-description-${ticket.ticketId}`}>Mô tả chi tiết</label><textarea id={`warranty-description-${ticket.ticketId}`} maxLength={2000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Thời điểm xảy ra, tình trạng thiết bị..." /><small>{description.length}/2000 ký tự</small></div>
+                            <div className="appointment-form-group"><label htmlFor={`warranty-file-${ticket.ticketId}`}>Ảnh hoặc tài liệu minh chứng <span>(không bắt buộc, JPG/PNG/PDF, tối đa 5 MB)</span></label><input id={`warranty-file-${ticket.ticketId}`} type="file" accept="image/jpeg,image/png,application/pdf" onChange={(event) => selectAttachment(event.target.files?.[0])} />{attachment && <small>Đã chọn: {attachment.name}</small>}</div>
+                            <button className="primary-button" type="submit" disabled={savingId === ticket.ticketId}>{savingId === ticket.ticketId ? "Đang gửi..." : "Gửi yêu cầu"}</button>
+                        </form>
+                    </section>
+                </div>}
             </article>;
         })}</div> : requests.length === 0 ? (
             <div className="appointment-panel appointment-empty-state"><h2>Bạn chưa gửi yêu cầu bảo hành</h2><p>Các yêu cầu đã gửi sẽ hiển thị trạng thái và phản hồi tại đây.</p></div>

@@ -68,8 +68,6 @@ function normalize(value: string | null | undefined) {
 function RepairTracking() {
     const [items, setItems] = useState<RepairHistoryEntry[]>([]);
     const [search, setSearch] = useState("");
-    const [activeTab, setActiveTab] = useState<"current" | "past">("current");
-    const [statusFilter, setStatusFilter] = useState("ALL");
     const [selected, setSelected] = useState<RepairHistoryEntry | null>(null);
     const [tracking, setTracking] = useState<RepairTrackingDetails | null>(null);
     const [quote, setQuote] = useState<RepairQuote | null>(null);
@@ -89,18 +87,17 @@ function RepairTracking() {
 
     const periodItems = useMemo(() => {
         const isPast = (item: RepairHistoryEntry) => Boolean(item.completedDate)
-            || ["Hoàn thành", "Đã kết thúc", "Đã hủy", "Khách từ chối", "Khách đã từ chối", "COMPLETED", "CANCELLED", "CUSTOMER_DECLINED"].includes(item.status);
-        return items.filter((item) => activeTab === "past" ? isPast(item) : !isPast(item))
+            || ["Hoàn thành", "Đã kết thúc", "Đã hủy", "Khách từ chối", "Khách đã từ chối", "Không thể sửa", "COMPLETED", "CANCELLED", "CUSTOMER_DECLINED", "CANNOT_BE_REPAIRED"].includes(item.status);
+        return items.filter((item) => !isPast(item))
             .sort((a, b) => (b.completedDate || b.ticketCode).localeCompare(a.completedDate || a.ticketCode));
-    }, [items, activeTab]);
+    }, [items]);
 
     const filteredItems = useMemo(() => {
         const term = normalize(search);
-        return periodItems.filter((item) => (statusFilter === "ALL" || item.status === statusFilter)
-            && (!term || [item.ticketCode, item.device, item.service, item.bookedService, item.status]
+        return periodItems.filter((item) =>
+            (!term || [item.ticketCode, item.device, item.service, item.bookedService]
                 .some((value) => normalize(value).includes(term))));
-    }, [periodItems, search, statusFilter]);
-    const availableStatuses = [...new Set(periodItems.map((item) => item.status))];
+    }, [periodItems, search]);
 
     const closeDetails = () => {
         setSelected(null);
@@ -207,11 +204,9 @@ function RepairTracking() {
     return <main className="management-page appointment-page">
         <header className="appointment-page-header"><span className="appointment-eyebrow">FIXHUB · KHÁCH HÀNG</span><h1>Theo dõi sửa chữa</h1><p>Tìm phiếu và xem từng mốc xử lý thiết bị theo thời gian thực tế từ hệ thống.</p></header>
         <form className="appointment-search-panel" onSubmit={(event) => event.preventDefault()}>
-            <div className="appointment-form-group"><label htmlFor="repair-tracking-search">Tìm phiếu sửa chữa</label><input id="repair-tracking-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã phiếu, thiết bị, dịch vụ hoặc trạng thái" /></div>
+            <div className="appointment-form-group"><label htmlFor="repair-tracking-search">Tìm phiếu sửa chữa</label><input id="repair-tracking-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã phiếu, thiết bị hoặc dịch vụ" /></div>
             <div className="appointment-search-actions"><button className="secondary-button" type="button" disabled={!search} onClick={() => setSearch("")}>Xóa tìm kiếm</button></div>
         </form>
-        <div className="appointment-tabs" role="tablist" aria-label="Phân loại tiến độ sửa chữa"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{items.filter((item) => !item.completedDate && !["Hoàn thành", "Đã kết thúc", "Đã hủy", "Khách từ chối", "Khách đã từ chối", "COMPLETED", "CANCELLED", "CUSTOMER_DECLINED"].includes(item.status)).length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{items.length - items.filter((item) => !item.completedDate && !["Hoàn thành", "Đã kết thúc", "Đã hủy", "Khách từ chối", "Khách đã từ chối", "COMPLETED", "CANCELLED", "CUSTOMER_DECLINED"].includes(item.status)).length}</span></button></div>
-        <div className="appointment-filter-row"><label htmlFor="tracking-status-filter">Lọc trạng thái</label><select id="tracking-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{availableStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
         <div className="appointment-results-heading"><div><h2>Phiếu sửa chữa của tôi</h2><p>{loading ? "Đang tải..." : `${filteredItems.length} phiếu`}</p></div></div>
         {loading ? <div className="appointment-panel table-state">Đang tải tiến trình sửa chữa...</div> : error ? (
             <div className="appointment-panel appointment-empty-state"><h2>Không tải được phiếu</h2><p>{error}</p><button className="secondary-button" type="button" onClick={() => { setLoading(true); setError(""); getMyRepairHistoryApi().then(setItems).catch((requestError: unknown) => setError(messageOf(requestError))).finally(() => setLoading(false)); }}>Thử tải lại</button></div>

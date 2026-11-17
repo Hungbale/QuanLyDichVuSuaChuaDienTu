@@ -3,9 +3,11 @@ import type { ChangeEvent, FormEvent } from "react";
 import {
     Mail,
     MapPin,
+    Pencil,
     Phone,
     Save,
     User,
+    X,
 } from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
@@ -32,6 +34,7 @@ function EditProfile() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
 
     const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -88,6 +91,16 @@ function EditProfile() {
         setNotice(null);
     };
 
+    const handleCancelEdit = () => {
+        if (!customer) return;
+        setFullName(customer.fullName);
+        setEmail(user?.email ?? customer.email ?? "");
+        setPhone(customer.phone);
+        setAddress(customer.address);
+        setIsEditing(false);
+        setNotice(null);
+    };
+
     const handleSubmit = async (
         event: FormEvent<HTMLFormElement>
     ) => {
@@ -96,6 +109,7 @@ function EditProfile() {
         if (!customer) {
             return;
         }
+        if (!isEditing) return;
         setNotice(null);
 
         const fullNameValue = fullName.trim();
@@ -154,6 +168,7 @@ function EditProfile() {
             );
             const message = "Cập nhật thông tin thành công.";
             setNotice({ type: "success", message });
+            setIsEditing(false);
         } catch (error: any) {
             console.error(error);
 
@@ -238,6 +253,7 @@ function EditProfile() {
                                             type="text"
                                             name="fullName"
                                             value={fullName}
+                                            disabled={!isEditing || saving}
                                             onChange={
                                                 handleChange
                                             }
@@ -280,6 +296,7 @@ function EditProfile() {
                                             type="tel"
                                             name="phone"
                                             value={phone}
+                                            disabled={!isEditing || saving}
                                             onChange={
                                                 handleChange
                                             }
@@ -303,6 +320,7 @@ function EditProfile() {
                                             type="text"
                                             name="address"
                                             value={address}
+                                            disabled={!isEditing || saving}
                                             onChange={
                                                 handleChange
                                             }
@@ -313,17 +331,21 @@ function EditProfile() {
                             </div>
 
                             <div className="profile-actions">
-                                <button
-                                    type="submit"
-                                    className="primary-button"
-                                    disabled={saving}
-                                >
-                                    <Save size={16} />
-
-                                    {saving
-                                        ? "Đang lưu..."
-                                        : "Lưu thay đổi"}
-                                </button>
+                                {isEditing ? (
+                                    <>
+                                        <button type="submit" className="primary-button" disabled={saving}>
+                                            <Save size={16} />
+                                            {saving ? "Đang lưu..." : "Lưu thay đổi"}
+                                        </button>
+                                        <button type="button" className="secondary-button" onClick={handleCancelEdit} disabled={saving}>
+                                            <X size={16} /> Hủy
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button type="button" className="primary-button" onClick={() => { setNotice(null); setIsEditing(true); }}>
+                                        <Pencil size={16} /> Chỉnh sửa thông tin
+                                    </button>
+                                )}
                             </div>
                         </form>
                     </>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { getRepairTrackingApi } from "../../api/repairTrackingApi";
 import { getMyRepairHistoryApi } from "../../api/repairTicketApi";
@@ -22,9 +22,23 @@ const formatDateTime = (value: string) => new Date(value).toLocaleString("vi-VN"
     dateStyle: "medium",
     timeStyle: "short",
 });
+const normalize = (value: string | null | undefined) => (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("vi")
+    .trim();
+const customerStatusLabel = (status: string) => {
+    const normalized = normalize(status).replace(/[ -]+/g, "_").toUpperCase();
+    if (["CUSTOMER_DECLINED", "KHACH_TU_CHOI", "KHACH_DA_TU_CHOI"].includes(normalized)) {
+        return "Đã từ chối";
+    }
+    return statusLabel(status);
+};
 
 function RepairHistory() {
     const [items, setItems] = useState<RepairHistoryEntry[]>([]);
+    const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState("ALL");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [selected, setSelected] = useState<RepairHistoryEntry | null>(null);
@@ -49,6 +63,16 @@ function RepairHistory() {
         const timer = window.setTimeout(() => { void loadHistory(); }, 0);
         return () => window.clearTimeout(timer);
     }, []);
+
+    const availableStatuses = [...new Set(items.map((item) => item.status))];
+    const filteredItems = useMemo(() => {
+        const term = normalize(search);
+        return items.filter((item) =>
+            (statusFilter === "ALL" || item.status === statusFilter)
+            && (!term || [item.ticketCode, item.device, item.service, item.bookedService, item.status]
+                .some((value) => normalize(value).includes(term))),
+        );
+    }, [items, search, statusFilter]);
 
     const closeDetails = () => {
         setSelected(null);
@@ -96,9 +120,25 @@ function RepairHistory() {
             <p>Xem lại các phiếu đã tiếp nhận, dịch vụ thực hiện và toàn bộ quá trình xử lý.</p>
         </header>
         {error && <div className="error-message" role="alert">{error}</div>}
+        <form className="appointment-search-panel" onSubmit={(event) => event.preventDefault()}>
+            <div className="appointment-form-group">
+                <label htmlFor="repair-history-search">Tìm phiếu sửa chữa</label>
+                <input id="repair-history-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã phiếu, thiết bị, dịch vụ hoặc trạng thái" />
+            </div>
+            <div className="appointment-search-actions">
+                <button className="secondary-button" type="button" disabled={!search} onClick={() => setSearch("")}>Xóa tìm kiếm</button>
+            </div>
+        </form>
+        <div className="appointment-filter-row">
+            <label htmlFor="repair-history-status-filter">Lọc trạng thái</label>
+            <select id="repair-history-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="ALL">Tất cả trạng thái</option>
+                {availableStatuses.map((status) => <option key={status} value={status}>{customerStatusLabel(status)}</option>)}
+            </select>
+        </div>
         <div className="appointment-results-heading"><div>
             <h2>Các phiếu của tôi</h2>
-            <p>{loading ? "Đang tải..." : `${items.length} phiếu sửa chữa`}</p>
+            <p>{loading ? "Đang tải..." : `${filteredItems.length} phiếu sửa chữa`}</p>
         </div></div>
         {loading ? <div className="appointment-panel table-state">Đang tải lịch sử sửa chữa...</div> : error ? (
             <div className="appointment-panel appointment-empty-state">
@@ -111,16 +151,21 @@ function RepairHistory() {
                 <h2>Chưa có lịch sử sửa chữa</h2>
                 <p>Các phiếu sửa chữa của bạn sẽ xuất hiện tại đây.</p>
             </div>
+        ) : filteredItems.length === 0 ? (
+            <div className="appointment-panel appointment-empty-state">
+                <h2>Không tìm thấy phiếu phù hợp</h2>
+                <p>Thử đổi từ khóa tìm kiếm hoặc trạng thái lọc.</p>
+            </div>
         ) : <div className="appointment-panel appointment-table-container">
             <table className="appointment-table repair-ticket-table">
                 <thead><tr><th>Mã phiếu</th><th>Thiết bị</th><th>Dịch vụ thực hiện</th><th>Ngày hoàn thành</th><th>Chi phí</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-                <tbody>{items.map((item) => <tr key={item.ticketId}>
+                <tbody>{filteredItems.map((item) => <tr key={item.ticketId}>
                     <td><strong>{item.ticketCode}</strong></td>
                     <td>{item.device}</td>
                     <td>{item.service || "Chưa có thông tin dịch vụ"}</td>
                     <td>{item.completedDate ? new Date(`${item.completedDate}T00:00:00`).toLocaleDateString("vi-VN") : "—"}</td>
                     <td>{item.cost == null ? "—" : `${new Intl.NumberFormat("vi-VN").format(item.cost)} ₫`}</td>
-                    <td><span className="appointment-status">{statusLabel(item.status)}</span></td>
+                    <td><span className="appointment-status">{customerStatusLabel(item.status)}</span></td>
                     <td><button className="secondary-button" type="button" onClick={() => void openDetails(item)}>Chi tiết</button></td>
                 </tr>)}</tbody>
             </table>
@@ -136,7 +181,7 @@ function RepairHistory() {
                 {detailError && <div className="error-message" role="alert">{detailError}</div>}
                 {detailLoading ? <div className="table-state">Đang tải quá trình sửa chữa...</div> : detailError ? null : <>
                     {tracking && <div className="appointment-details-grid tracking-summary">
-                        <div><span>Trạng thái hiện tại</span><strong>{statusLabel(tracking.currentStatus)}</strong></div>
+                        <div><span>Trạng thái hiện tại</span><strong>{customerStatusLabel(tracking.currentStatus)}</strong></div>
                         <div><span>Dịch vụ</span><strong>{tracking.serviceName || selected.bookedService || selected.service || "Chưa có thông tin"}</strong></div>
                         <div><span>Ngày hoàn thành</span><strong>{selected.completedDate ? new Date(`${selected.completedDate}T00:00:00`).toLocaleDateString("vi-VN") : "Chưa hoàn thành"}</strong></div>
                     </div>}
