@@ -1,5 +1,4 @@
 ﻿import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
 import { getCustomersApi } from "../../api/customerApi";
 import { getMyEmployeeProfileApi } from "../../api/employeeApi";
 import { getMyAssignedAppointmentGroupsApi } from "../../api/appointmentApi";
@@ -13,10 +12,14 @@ import type { RepairTicket } from "../../types/repairTicket";
 const messageOf = (error: any) => error.response?.data?.message || error.response?.data?.error || error.message || "Không thể xử lý tiếp nhận thiết bị.";
 const isScheduled = (status: string) => status === "SCHEDULED" || status === "Đã lên lịch";
 
-function EmployeeReceiveDevice() {
-    const [searchParams] = useSearchParams();
-    const requestedAppointmentId = searchParams.get("appointmentId");
-    const requestedTicketId = searchParams.get("ticketId");
+interface EmployeeReceiveDeviceProps {
+    appointmentId?: string | null;
+    ticketId?: string | null;
+    onClose: () => void;
+    onSuccess: (message: string) => void;
+}
+
+function EmployeeReceiveDevice({ appointmentId: requestedAppointmentId, ticketId: requestedTicketId, onClose, onSuccess }: EmployeeReceiveDeviceProps) {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [assignedAppointments, setAssignedAppointments] = useState<AssignedAppointment[]>([]);
     const [assignedTickets, setAssignedTickets] = useState<RepairTicket[]>([]);
@@ -37,7 +40,6 @@ function EmployeeReceiveDevice() {
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [notice, setNotice] = useState("");
 
     useEffect(() => {
         Promise.all([
@@ -135,12 +137,17 @@ function EmployeeReceiveDevice() {
             setCustomerReportedIssue(appointment?.problemDescription || "");
         } else {
             setCustomerReportedIssue("");
-        }
+            }
         setCustomerPickerOpen(false);
     };
 
     const markTicketReceived = (ticketId: number) => {
         setAssignedTickets((current) => current.map((ticket) => ticket.id === ticketId ? { ...ticket, status: "RECEIVED" } : ticket));
+    };
+
+    const closeForm = () => {
+        if (saving) return;
+        onClose();
     };
 
     const createOrGetIntake = async (ticketId: number, request: RepairIntakeRequest, images: File[]) => {
@@ -173,7 +180,6 @@ function EmployeeReceiveDevice() {
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setError("");
-        setNotice("");
         if (!customerId) return setError("Hãy chọn khách hàng trong danh sách gợi ý.");
         if (employeeId == null) return setError("Không tải được thông tin nhân viên để phân công phiếu.");
         if (!device.trim()) return setError("Vui lòng nhập thiết bị cần tiếp nhận.");
@@ -212,7 +218,7 @@ function EmployeeReceiveDevice() {
             }, intakePhotos);
 
             markTicketReceived(ticket.id);
-            setNotice(`Đã lưu biên nhận tiếp nhận phiếu ${ticket.ticketCode} lên hệ thống.`);
+            onSuccess(`\u0110\u00e3 l\u01b0u bi\u00ean nh\u1eadn ti\u1ebfp nh\u1eadn phi\u1ebfu ${ticket.ticketCode} l\u00ean h\u1ec7 th\u1ed1ng.`);
             resetForm();
         } catch (requestError: any) {
             setError(messageOf(requestError));
@@ -221,16 +227,10 @@ function EmployeeReceiveDevice() {
         }
     };
 
-    return <main className="management-page appointment-page">
-        <header className="appointment-page-header">
-            <span className="appointment-eyebrow">FIXHUB · NHÂN VIÊN</span>
-            <h1>Tiếp nhận thiết bị</h1>
-            <p>Ghi nhận biên nhận cho phiếu được giao; thông tin sẽ được lưu trực tiếp qua API của hệ thống.</p>
-        </header>
-        {error && <div className="error-message" role="alert">{error}</div>}
-        {notice && <div className="success-message" role="status">{notice}</div>}
-        <form className="appointment-panel ticket-editor" onSubmit={submit}>
-            <div className="appointment-card-top"><div><span className="appointment-card-reference">BIÊN NHẬN THIẾT BỊ</span><h2>Thông tin khách hàng và thiết bị</h2></div></div>
+    return <div className="repair-detail-backdrop" role="presentation" onClick={closeForm}>
+    <form className="appointment-panel ticket-editor repair-detail-dialog receive-device-dialog" role="dialog" aria-modal="true" aria-labelledby="receive-device-form-title" onSubmit={submit} onClick={(event) => event.stopPropagation()}>
+            <div className="appointment-card-top"><div><span className="appointment-card-reference">{"BI\u00CAN NH\u1EACN THI\u1EBET B\u1ECA"}</span><h2 id="receive-device-form-title">{"Th\u00F4ng tin kh\u00E1ch h\u00E0ng v\u00E0 thi\u1EBFt b\u1ECB"}</h2></div><button className="secondary-button" type="button" onClick={closeForm} disabled={saving}>{"\u0110\u00f3ng"}</button></div>
+            {error && <div className="error-message" role="alert">{error}</div>}
             <div className="appointment-form-grid">
                 <div className="appointment-form-group appointment-form-full customer-picker-group">
                     <label htmlFor="receive-customer">Khách hàng</label>
@@ -251,7 +251,8 @@ function EmployeeReceiveDevice() {
                                 setCustomerSearch("");
                                 setSelectedAppointment(null);
                                 setSelectedTicket(null);
-                            }
+                                setCustomerReportedIssue("");
+                                                    }
                             setCustomerPickerOpen(true);
                         }}
                         onBlur={() => setCustomerPickerOpen(false)}
@@ -260,7 +261,8 @@ function EmployeeReceiveDevice() {
                             setCustomerId("");
                             setSelectedAppointment(null);
                             setSelectedTicket(null);
-                            setCustomerPickerOpen(true);
+                            setCustomerReportedIssue("");
+                                                setCustomerPickerOpen(true);
                         }}
                     />
                     {customerPickerOpen && <div id="receive-customer-options" className="customer-picker-results" role="listbox" onMouseDown={(event) => event.preventDefault()}>
@@ -286,13 +288,13 @@ function EmployeeReceiveDevice() {
                 <div className="appointment-form-group"><label htmlFor="receive-serial">Số serial</label><input id="receive-serial" maxLength={100} value={serialNumber} onChange={(event) => setSerialNumber(event.target.value)} placeholder="Nếu có" /></div>
                 <div className="appointment-form-group appointment-form-full"><label htmlFor="receive-condition">Tình trạng ngoại quan / ban đầu</label><textarea id="receive-condition" required maxLength={2000} rows={3} value={initialCondition} onChange={(event) => setInitialCondition(event.target.value)} placeholder="Mô tả vết xước, móp hoặc tình trạng thiết bị khi nhận" /></div>
                 <div className="appointment-form-group appointment-form-full"><label htmlFor="receive-accessories">Phụ kiện đi kèm</label><textarea id="receive-accessories" maxLength={2000} rows={2} value={accessories} onChange={(event) => setAccessories(event.target.value)} placeholder="Ví dụ: sạc, túi đựng, chuột; ghi rõ nếu không có" /></div>
-                <div className="appointment-form-group appointment-form-full"><label htmlFor="receive-issue">Lỗi khách hàng phản ánh</label><textarea id="receive-issue" maxLength={5000} rows={3} value={customerReportedIssue} onChange={(event) => setCustomerReportedIssue(event.target.value)} placeholder="Mô tả lỗi khách báo khi mang thiết bị đến" /></div>
-                <div className="appointment-form-group appointment-form-full"><label htmlFor="receive-note">Ghi chú tiếp nhận</label><textarea id="receive-note" maxLength={2000} rows={2} value={intakeNote} onChange={(event) => setIntakeNote(event.target.value)} placeholder="Ghi chú thêm cho kỹ thuật viên" /></div>
+                <div className="appointment-form-group appointment-form-full"><label htmlFor="receive-issue">{"L\u1ed7i kh\u00e1ch h\u00e0ng ph\u1ea3n \u00e1nh"}</label><textarea id="receive-issue" maxLength={5000} rows={3} value={customerReportedIssue} readOnly placeholder={"L\u1ecbch h\u1eb9n ch\u01b0a c\u00f3 n\u1ed9i dung l\u1ed7i kh\u00e1ch ghi."} /></div>
+                <div className="appointment-form-group appointment-form-full"><label htmlFor="receive-note">Lỗi tiếp nhận</label><textarea id="receive-note" maxLength={2000} rows={3} value={intakeNote} onChange={(event) => setIntakeNote(event.target.value)} placeholder="Mô tả lỗi nhân viên ghi nhận khi tiếp nhận thiết bị" /></div>
                 <div className="appointment-form-group appointment-form-full"><label htmlFor="receive-evidence">Ảnh thiết bị khi tiếp nhận</label><input id="receive-evidence" type="file" accept="image/jpeg,image/png" multiple required aria-describedby="receive-evidence-note" onChange={(event) => setIntakePhotos(Array.from(event.target.files || []))} /><small id="receive-evidence-note">Bắt buộc 1–5 ảnh JPEG hoặc PNG, tối đa 5 MB mỗi ảnh. Đã chọn: {intakePhotos.length}.</small></div>
             </div>
             <div className="appointment-search-actions"><button className="primary-button" type="submit" disabled={saving || loading || customers.length === 0 || employeeId == null}>{saving ? "Đang lưu biên nhận..." : "Xác nhận tiếp nhận"}</button></div>
         </form>
-    </main>;
+    </div>;
 }
 
 export default EmployeeReceiveDevice;

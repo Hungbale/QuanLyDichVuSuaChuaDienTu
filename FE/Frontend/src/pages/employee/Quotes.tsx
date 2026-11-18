@@ -4,8 +4,10 @@ import { getMyEmployeeProfileApi } from "../../api/employeeApi";
 import { createRepairQuoteApi } from "../../api/repairQuoteApi";
 import { getRepairTicketsApi } from "../../api/repairTicketApi";
 import { getServicesApi } from "../../api/serviceApi";
+import { confirmRepairPaymentApi, getRepairPaymentsApi } from "../../api/repairPaymentApi";
 import { statusLabel } from "../../utils/statusLabel";
 import type { RepairQuoteItemRequest } from "../../types/repairQuote";
+import type { RepairPayment } from "../../types/repairPayment";
 import type { RepairTicket } from "../../types/repairTicket";
 import type { ServiceItem } from "../../types/service";
 
@@ -22,12 +24,14 @@ function EmployeeQuotes() {
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedTicketId = Number(searchParams.get("ticketId"));
     const [tickets, setTickets] = useState<RepairTicket[]>([]);
+    const [paymentsByTicket, setPaymentsByTicket] = useState<Record<number, RepairPayment[]>>({});
     const [services, setServices] = useState<ServiceItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<RepairTicket | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
     const [saving, setSaving] = useState(false);
+    const [confirmingPaymentId, setConfirmingPaymentId] = useState<number | null>(null);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [activeTab, setActiveTab] = useState<"current" | "past">("current");
@@ -38,12 +42,10 @@ function EmployeeQuotes() {
     const pastTickets = tickets.filter(isPastTicket);
     const periodTickets = activeTab === "current" ? currentTickets : pastTickets;
     const filteredTickets = periodTickets.filter((ticket) => statusFilter === "ALL" || ticket.status === statusFilter).filter((ticket) =>
-        [ticket.ticketCode, ticket.customerName, ticket.device, ticket.status]
+        [ticket.ticketCode, ticket.customerName, ticket.device]
             .some((value) => value?.toLocaleLowerCase("vi").includes(searchTerm.trim().toLocaleLowerCase("vi"))),
     );
     const statusOptions = [...new Set(periodTickets.map((ticket) => ticket.status))];
-    const firstQuoteReadyTicket = tickets.find((ticket) => quoteReady(ticket.status));
-
     const load = useCallback(async () => {
         setLoading(true);
         setError("");
@@ -53,8 +55,18 @@ function EmployeeQuotes() {
                 getRepairTicketsApi(),
                 getServicesApi({ status: "ACTIVE" }),
             ]);
-            setTickets(ticketList.filter((ticket) => ticket.technicianId === profile.id)
-                .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate) || b.id - a.id));
+            const assignedTickets = ticketList.filter((ticket) => ticket.technicianId === profile.id)
+                .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate) || b.id - a.id);
+            const paymentEntries = await Promise.all(assignedTickets.map(async (ticket) => {
+                try {
+                    return [ticket.id, await getRepairPaymentsApi(ticket.id)] as const;
+                } catch (e: any) {
+                    if (e.response?.status === 404) return [ticket.id, []] as const;
+                    throw e;
+                }
+            }));
+            setTickets(assignedTickets);
+            setPaymentsByTicket(Object.fromEntries(paymentEntries));
             setServices(serviceList);
         } catch (e: any) {
             setError(messageOf(e));
@@ -62,6 +74,21 @@ function EmployeeQuotes() {
             setLoading(false);
         }
     }, []);
+
+    const confirmPayment = async (payment: RepairPayment) => {
+        setConfirmingPaymentId(payment.id);
+        setError("");
+        setNotice("");
+        try {
+            await confirmRepairPaymentApi(payment.id);
+            setNotice(`Đã xác nhận thanh toán cho phiếu ${payment.ticketCode}.`);
+            await load();
+        } catch (e: any) {
+            setError(messageOf(e));
+        } finally {
+            setConfirmingPaymentId(null);
+        }
+    };
 
     useEffect(() => { void load(); }, [load]);
 
@@ -119,17 +146,16 @@ function EmployeeQuotes() {
                 <span className="appointment-eyebrow">FIXHUB · NHÂN VIÊN</span>
                 <h1>Quản lý báo giá</h1>
                 <p>Lập các hạng mục sửa chữa và gửi tổng chi phí cho khách hàng xác nhận.</p>
-                <button className="primary-button" type="button" disabled={!firstQuoteReadyTicket} onClick={() => { if (firstQuoteReadyTicket) { setSelected(firstQuoteReadyTicket); setItems([emptyItem()]); setError(""); } }}>Tạo báo giá</button>
             </header>
             {error && <div className="error-message" role="alert">{error}</div>}
             {notice && <div className="success-message" role="status">{notice}</div>}
 
             <form className="appointment-search-panel" onSubmit={(event) => event.preventDefault()}>
-                <div className="appointment-form-group"><label htmlFor="quote-search">Tìm báo giá</label><input id="quote-search" type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Mã phiếu, khách hàng, thiết bị hoặc trạng thái" /></div>
+                <div className="appointment-form-group"><label htmlFor="quote-search">Tìm báo giá</label><input id="quote-search" type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Mã phiếu, khách hàng hoặc thiết bị" /></div>
                 <div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => setSearchTerm("")} disabled={!searchTerm}>Xóa tìm kiếm</button></div>
             </form>
 
-            <div className="appointment-tabs" role="tablist" aria-label="Phân loại phiếu báo giá"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{currentTickets.length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{pastTickets.length}</span></button></div>
+            <div className="appointment-tabs" role="tablist" aria-label="Phân loại phiếu báo giá"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => { setActiveTab("current"); setStatusFilter("ALL"); }}>Hiện tại <span>{currentTickets.length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => { setActiveTab("past"); setStatusFilter("ALL"); }}>Đã qua <span>{pastTickets.length}</span></button></div>
             <div className="appointment-filter-row"><label htmlFor="employee-quote-status">Lọc trạng thái</label><select id="employee-quote-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{statusOptions.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
 
             <div className="appointment-results-heading"><div><h2>Phiếu {activeTab === "current" ? "hiện tại" : "đã qua"}</h2><p>{loading ? "Đang tải..." : `${filteredTickets.length} phiếu`}</p></div></div>
@@ -140,7 +166,7 @@ function EmployeeQuotes() {
             ) : (
                 <div className="appointment-panel appointment-table-container">
                     <table className="appointment-table repair-ticket-table">
-                        <thead><tr><th>Mã phiếu</th><th>Khách hàng</th><th>Thiết bị</th><th>Ngày nhận</th><th>Trạng thái</th><th>Báo giá</th></tr></thead>
+                        <thead><tr><th>Mã phiếu</th><th>Khách hàng</th><th>Thiết bị</th><th>Ngày nhận</th><th>Trạng thái</th><th>Báo giá</th><th>Thanh toán</th></tr></thead>
                         <tbody>{filteredTickets.map((ticket) => (
                             <tr key={ticket.id}>
                                 <td><strong>{ticket.ticketCode}</strong></td>
@@ -156,6 +182,13 @@ function EmployeeQuotes() {
                                                     : ticket.status === "Đang sửa" ? <span>Khách đã xác nhận</span>
                                                         : <span>Chờ kiểm tra</span>}
                                 </td>
+                                <td>{(() => {
+                                    const payments = paymentsByTicket[ticket.id] || [];
+                                    const payment = payments[0];
+                                    if (!payment) return <span>Chưa có yêu cầu</span>;
+                                    if (payment.status === "PAID") return <span className="appointment-status completed">Đã thanh toán</span>;
+                                    return <button className="secondary-button" type="button" disabled={confirmingPaymentId === payment.id} onClick={() => void confirmPayment(payment)}>{confirmingPaymentId === payment.id ? "Đang xác nhận..." : "Đã nhận tiền · Xác nhận"}</button>;
+                                })()}</td>
                             </tr>
                         ))}</tbody>
                     </table>

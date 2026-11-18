@@ -1,18 +1,21 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { assignAppointmentApi, getAppointmentCancellationRequestsApi, getMyAssignedAppointmentGroupsApi, getPendingAppointmentsApi, reviewAppointmentCancellationApi } from "../../api/appointmentApi";
+import { useSearchParams } from "react-router-dom";
+import EmployeeReceiveDevice from "./ReceiveDeviceModal";
+import { getAppointmentCancellationRequestsApi, getMyAssignedAppointmentGroupsApi, reviewAppointmentCancellationApi } from "../../api/appointmentApi";
 import type { AppointmentCancellationRequestRecord, AssignedAppointment } from "../../types/appointment";
 import { statusLabel } from "../../utils/statusLabel";
 
 function EmployeeAppointments() {
-    const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [intakeTarget, setIntakeTarget] = useState<{ appointmentId?: string | null; ticketId?: string | null } | null>(null);
+    const [successNotice, setSuccessNotice] = useState("");
+    const [activeTab, setActiveTab] = useState<"assigned" | "received">("assigned");
     const [appointments, setAppointments] = useState<AssignedAppointment[]>([]);
     const [receivedAppointments, setReceivedAppointments] = useState<AssignedAppointment[]>([]);
-    const [pendingAppointments, setPendingAppointments] = useState<AssignedAppointment[]>([]);
     const [cancellationRequests, setCancellationRequests] = useState<AppointmentCancellationRequestRecord[]>([]);
     const [viewingAppointment, setViewingAppointment] = useState<AssignedAppointment | null>(null);
     const [workingId, setWorkingId] = useState<number | null>(null);
-    const [phone, setPhone] = useState("");
+    const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -20,21 +23,19 @@ function EmployeeAppointments() {
         setLoading(true);
         setError("");
         try {
-            const [groups, pending, cancellations] = await Promise.all([
+            const [groups, cancellations] = await Promise.all([
                 getMyAssignedAppointmentGroupsApi(),
-                getPendingAppointmentsApi(),
                 getAppointmentCancellationRequestsApi(),
             ]);
-            const normalizedPhone = contactPhone?.trim();
+            const query = contactPhone?.trim() || "";
+            const normalizedQuery = query.toLocaleLowerCase("vi");
+            const matchesCustomer = (appointment: AssignedAppointment) => !query
+                || (appointment.customerName || "").toLocaleLowerCase("vi").includes(normalizedQuery)
+                || appointment.contactPhone.includes(query);
             const newestFirst = (items: AssignedAppointment[]) => [...items].sort((a, b) =>
                 `${b.appointmentDate}T${b.appointmentTime}`.localeCompare(`${a.appointmentDate}T${a.appointmentTime}`) || b.id - a.id);
-            setAppointments(newestFirst(normalizedPhone
-                ? groups.actionRequired.filter((appointment) => appointment.contactPhone.includes(normalizedPhone))
-                : groups.actionRequired));
-            setReceivedAppointments(newestFirst(normalizedPhone
-                ? groups.received.filter((appointment) => appointment.contactPhone.includes(normalizedPhone))
-                : groups.received));
-            setPendingAppointments(newestFirst(normalizedPhone ? pending.filter((appointment) => appointment.contactPhone.includes(normalizedPhone)) : pending));
+            setAppointments(newestFirst(groups.actionRequired.filter(matchesCustomer)));
+            setReceivedAppointments(newestFirst(groups.received.filter(matchesCustomer)));
             setCancellationRequests(cancellations);
         } catch (requestError: any) {
             setError(requestError.response?.data?.message || "Không thể tải danh sách lịch hẹn.");
@@ -47,26 +48,28 @@ function EmployeeAppointments() {
         void loadAppointments();
     }, []);
 
+    useEffect(() => {
+        const appointmentId = searchParams.get("appointmentId");
+        const ticketId = searchParams.get("ticketId");
+        if (appointmentId || ticketId) {
+            setIntakeTarget({ appointmentId, ticketId });
+            setSearchParams({}, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
+
     const handleSearch = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        void loadAppointments(phone);
+        void loadAppointments(searchQuery);
     };
 
     const handleReset = () => {
-        setPhone("");
+        setSearchQuery("");
         void loadAppointments();
-    };
-
-    const claimAppointment = async (id: number) => {
-        setWorkingId(id); setError("");
-        try { await assignAppointmentApi(id); await loadAppointments(phone); }
-        catch (requestError: any) { setError(requestError.response?.data?.message || "Không thể nhận lịch hẹn."); }
-        finally { setWorkingId(null); }
     };
 
     const reviewCancellation = async (id: number, decision: "APPROVE" | "REJECT") => {
         setWorkingId(id); setError("");
-        try { await reviewAppointmentCancellationApi(id, decision); await loadAppointments(phone); }
+        try { await reviewAppointmentCancellationApi(id, decision); await loadAppointments(searchQuery); }
         catch (requestError: any) { setError(requestError.response?.data?.message || "Không thể xử lý yêu cầu hủy."); }
         finally { setWorkingId(null); }
     };
@@ -80,16 +83,17 @@ function EmployeeAppointments() {
             </header>
 
             {error && <div className="error-message" role="alert">{error}</div>}
+            {successNotice && <div className="success-message" role="status">{successNotice}</div>}
 
             <form className="appointment-search-panel" onSubmit={handleSearch}>
                 <div className="appointment-form-group">
-                    <label htmlFor="appointment-search-phone">Số điện thoại khách hàng</label>
+                    <label htmlFor="appointment-search-phone">Tìm khách theo tên hoặc số điện thoại</label>
                     <input
                         id="appointment-search-phone"
                         type="search"
-                        value={phone}
-                        onChange={(event) => setPhone(event.target.value)}
-                        placeholder="Để trống để xem tất cả lịch hẹn"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        placeholder="Nhập tên hoặc số điện thoại khách hàng"
                     />
                 </div>
                 <div className="appointment-search-actions">
@@ -98,14 +102,15 @@ function EmployeeAppointments() {
                 </div>
             </form>
 
-            <div className="appointment-results-heading">
-                <div>
-                    <h2>Lịch hẹn được giao cho tôi</h2>
-                    <p>{loading ? "Đang lấy dữ liệu từ hệ thống..." : `${appointments.length} lịch hẹn`}</p>
-                </div>
+            <div className="appointment-tabs" role="tablist" aria-label={"Ph\u00e2n lo\u1ea1i l\u1ecbch h\u1eb9n"}>
+                <button className={activeTab === "assigned" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "assigned"} onClick={() => setActiveTab("assigned")}>{"L\u1ecbch h\u1eb9n \u0111\u01b0\u1ee3c giao"} <span>{appointments.length}</span></button>
+                <button className={activeTab === "received" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "received"} onClick={() => setActiveTab("received")}>{"L\u1ecbch h\u1eb9n \u0111\u00e3 ti\u1ebfp nh\u1eadn"} <span>{receivedAppointments.length}</span></button>
             </div>
-
-            {loading ? (
+            <div className="appointment-results-heading"><div>
+                <h2>{activeTab === "assigned" ? "L\u1ecbch h\u1eb9n \u0111\u01b0\u1ee3c giao cho t\u00f4i" : "L\u1ecbch h\u1eb9n \u0111\u00e3 ti\u1ebfp nh\u1eadn"}</h2>
+                <p>{loading ? "\u0110ang t\u1ea3i d\u1eef li\u1ec7u..." : `${activeTab === "assigned" ? appointments.length : receivedAppointments.length} l\u1ecbch h\u1eb9n`}</p>
+            </div></div>
+            {activeTab === "assigned" ? (loading ? (
                 <div className="appointment-panel table-state">Đang tải lịch hẹn...</div>
             ) : appointments.length === 0 ? (
                 <div className="appointment-panel appointment-empty-state">
@@ -149,25 +154,33 @@ function EmployeeAppointments() {
                                         </span>
                                     </td>
                                     <td className="appointment-description-cell">{appointment.problemDescription}</td>
-                                    <td><div className="repair-ticket-actions"><button className="secondary-button" type="button" onClick={() => setViewingAppointment(appointment)}>Xem chi tiết</button>{appointment.status === "CONFIRMED" && <button className="primary-button" type="button" onClick={() => navigate(`/employee/receive-device?appointmentId=${appointment.id}`)}>Tiếp nhận thiết bị</button>}</div></td>
+                                    <td><div className="repair-ticket-actions"><button className="secondary-button" type="button" onClick={() => setViewingAppointment(appointment)}>Xem chi tiết</button>{appointment.status === "CONFIRMED" && <button className="primary-button" type="button" onClick={() => { setError(""); setSuccessNotice(""); setIntakeTarget({ appointmentId: String(appointment.id) }); }}>Tiếp nhận thiết bị</button>}</div></td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
+            )) : loading ? (
+                <div className="appointment-panel table-state">{"\u0110ang t\u1ea3i l\u1ecbch h\u1eb9n \u0111\u00e3 ti\u1ebfp nh\u1eadn..."}</div>
+            ) : receivedAppointments.length === 0 ? (
+                <div className="appointment-panel appointment-empty-state"><h2>{"Ch\u01b0a c\u00f3 l\u1ecbch h\u1eb9n \u0111\u00e3 ti\u1ebfp nh\u1eadn"}</h2><p>{"L\u1ecbch h\u1eb9n s\u1ebd chuy\u1ec3n v\u00e0o m\u1ee5c n\u00e0y sau khi b\u1ea1n ti\u1ebfp nh\u1eadn thi\u1ebft b\u1ecb."}</p></div>
+            ) : (
+                <div className="appointment-panel appointment-table-container"><table className="appointment-table"><thead><tr><th>{"L\u1ecbch h\u1eb9n"}</th><th>{"Kh\u00e1ch"}</th><th>{"Thi\u1ebft b\u1ecb / d\u1ecbch v\u1ee5"}</th><th>{"Th\u1eddi gian"}</th><th>{"Tr\u1ea1ng th\u00e1i"}</th><th></th></tr></thead><tbody>{receivedAppointments.map((appointment) => <tr key={appointment.id}><td>#{appointment.id}</td><td>{appointment.customerName || appointment.contactPhone}</td><td>{appointment.device}<span>{appointment.serviceName}</span></td><td>{new Date(`${appointment.appointmentDate}T00:00:00`).toLocaleDateString("vi-VN")} {"\u00b7"} {appointment.appointmentTime.slice(0, 5)}</td><td><span className="appointment-status confirmed">{"\u0110\u00e3 ti\u1ebfp nh\u1eadn"}</span></td><td><button className="secondary-button" type="button" onClick={() => setViewingAppointment(appointment)}>{"Xem chi ti\u1ebft"}</button></td></tr>)}</tbody></table></div>
             )}
-            {receivedAppointments.length > 0 && <>
-                <div className="appointment-results-heading"><div><h2>Đã tiếp nhận thiết bị</h2><p>{receivedAppointments.length} lịch đã chuyển sang phiếu sửa chữa</p></div></div>
-                <div className="appointment-panel appointment-table-container"><table className="appointment-table"><thead><tr><th>Lịch hẹn</th><th>Khách</th><th>Thiết bị / dịch vụ</th><th>Thời gian</th><th>Trạng thái</th><th></th></tr></thead><tbody>{receivedAppointments.map((appointment) => <tr key={appointment.id}><td>#{appointment.id}</td><td>{appointment.customerName || appointment.contactPhone}</td><td>{appointment.device}<span>{appointment.serviceName}</span></td><td>{new Date(`${appointment.appointmentDate}T00:00:00`).toLocaleDateString("vi-VN")} · {appointment.appointmentTime.slice(0, 5)}</td><td><span className="appointment-status confirmed">Đã tiếp nhận</span></td><td><button className="secondary-button" type="button" onClick={() => setViewingAppointment(appointment)}>Xem chi tiết</button></td></tr>)}</tbody></table></div>
-            </>}
-            {pendingAppointments.length > 0 && <>
-                <div className="appointment-results-heading"><div><h2>Lịch hẹn đang chờ nhận</h2><p>{pendingAppointments.length} lịch</p></div></div>
-                <div className="appointment-panel appointment-table-container"><table className="appointment-table"><thead><tr><th>Lịch hẹn</th><th>Khách</th><th>Thiết bị / dịch vụ</th><th>Thời gian</th><th>Thao tác</th></tr></thead><tbody>{pendingAppointments.map((appointment) => <tr key={appointment.id}><td>#{appointment.id}</td><td>{appointment.customerName || appointment.contactPhone}</td><td>{appointment.device}<span>{appointment.serviceName}</span></td><td>{new Date(`${appointment.appointmentDate}T00:00:00`).toLocaleDateString("vi-VN")} · {appointment.appointmentTime.slice(0, 5)}</td><td><button className="primary-button" type="button" disabled={workingId === appointment.id} onClick={() => void claimAppointment(appointment.id)}>{workingId === appointment.id ? "Đang nhận..." : "Nhận lịch & phân công cho tôi"}</button></td></tr>)}</tbody></table></div>
-            </>}
             {cancellationRequests.length > 0 && <>
                 <div className="appointment-results-heading"><div><h2>Yêu cầu hủy lịch</h2><p>{cancellationRequests.length} yêu cầu</p></div></div>
                 <div className="appointment-panel appointment-table-container"><table className="appointment-table"><thead><tr><th>Lịch hẹn</th><th>Khách</th><th>Thiết bị</th><th>Lý do</th><th>Thao tác</th></tr></thead><tbody>{cancellationRequests.map((request) => <tr key={request.appointmentId}><td>#{request.appointmentId}<span>{new Date(`${request.appointmentDate}T00:00:00`).toLocaleDateString("vi-VN")}</span></td><td>{request.customerName}</td><td>{request.device}</td><td>{request.cancellationReason}</td><td><div className="repair-ticket-actions"><button className="primary-button" type="button" disabled={workingId === request.appointmentId} onClick={() => void reviewCancellation(request.appointmentId, "APPROVE")}>Duyệt</button><button className="secondary-button" type="button" disabled={workingId === request.appointmentId} onClick={() => void reviewCancellation(request.appointmentId, "REJECT")}>Từ chối</button></div></td></tr>)}</tbody></table></div>
             </>}
+            {intakeTarget && <EmployeeReceiveDevice
+                appointmentId={intakeTarget.appointmentId}
+                ticketId={intakeTarget.ticketId}
+                onClose={() => setIntakeTarget(null)}
+                onSuccess={(message) => {
+                    setIntakeTarget(null);
+                    setSuccessNotice(message);
+                    void loadAppointments(searchQuery);
+                }}
+            />}
             {viewingAppointment && <div className="modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingAppointment(null); }}>
                 <section className="modal customer-modal" role="dialog" aria-modal="true" aria-labelledby="employee-appointment-detail-title">
                     <div className="modal-header"><div><h2 id="employee-appointment-detail-title">Chi tiết lịch hẹn #{viewingAppointment.id}</h2><p>{viewingAppointment.serviceName}</p></div><button className="modal-close" type="button" aria-label="Đóng" onClick={() => setViewingAppointment(null)}>×</button></div>
