@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
     CalendarDays,
-    CalendarPlus,
     ChartColumn,
     ClipboardCheck,
     ClipboardList,
@@ -15,7 +14,6 @@ import {
     PanelLeftOpen,
     ShieldCheck,
     Star,
-    Stethoscope,
     UserRound,
     Users,
     Wrench,
@@ -51,9 +49,7 @@ const roleMenus = {
     EMPLOYEE: [
         { to: "/employee", label: "Bảng điều khiển", icon: LayoutDashboard, end: true },
         { to: "/employee/appointments", label: "Lịch hẹn", icon: CalendarDays },
-        { to: "/employee/receive-device", label: "Tiếp nhận thiết bị", icon: CalendarPlus },
         { to: "/employee/repairs", label: "Phiếu sửa chữa", icon: ClipboardList },
-        { to: "/employee/diagnosis", label: "Chẩn đoán thiết bị", icon: Stethoscope },
         { to: "/employee/quotes", label: "Báo giá", icon: FileText },
         { to: "/employee/repair-process", label: "Thực hiện sửa chữa", icon: Wrench },
         { to: "/employee/payments", label: "Xác nhận thanh toán", icon: CreditCard },

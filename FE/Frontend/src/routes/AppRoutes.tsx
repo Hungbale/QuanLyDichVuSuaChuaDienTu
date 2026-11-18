@@ -30,9 +30,7 @@ import CustomerServices from "../pages/customer/CustomerServices";
 // EMPLOYEE
 import EmployeeDashboard from "../pages/employee/Dashboard";
 import EmployeeProfile from "../pages/employee/Profile";
-import EmployeeReceiveDevice from "../pages/employee/ReceiveDevice";
 import EmployeeRepairs from "../pages/employee/Repairs";
-import EmployeeDiagnosis from "../pages/employee/Diagnosis";
 import EmployeeQuotes from "../pages/employee/Quotes";
 import EmployeeAppointments from "../pages/employee/Appointments";
 import EmployeeRepairProcess from "../pages/employee/RepairProcess";
@@ -183,22 +181,10 @@ function AppRoutes() {
                             element={<EmployeeProfile />}
                         />
 
-                        {/* 14 */}
-                        <Route
-                            path="receive-device"
-                            element={<EmployeeReceiveDevice />}
-                        />
-
                         {/* 15 */}
                         <Route
                             path="repairs"
                             element={<EmployeeRepairs />}
-                        />
-
-                        {/* 16 */}
-                        <Route
-                            path="diagnosis"
-                            element={<EmployeeDiagnosis />}
                         />
 
                         {/* 17 */}

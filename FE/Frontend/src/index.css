@@ -3527,6 +3527,37 @@ th {
     margin-top: 20px;
 }
 
+.receive-device-dialog {
+    padding: 20px;
+}
+
+.receive-device-dialog .appointment-form-grid {
+    gap: 12px;
+}
+
+.receive-device-dialog .appointment-form-group {
+    gap: 5px;
+}
+
+.receive-device-dialog .appointment-form-group input,
+.receive-device-dialog .appointment-form-group select {
+    min-height: 38px;
+    padding: 8px 10px;
+}
+
+.receive-device-dialog .appointment-form-group textarea {
+    min-height: 68px;
+    padding: 8px 10px;
+}
+
+.receive-device-dialog .appointment-card-top {
+    margin-bottom: 12px;
+}
+
+.receive-device-dialog .appointment-search-actions {
+    margin-top: 12px;
+}
+
 .repair-ticket-table {
     min-width: 1000px;
 }
