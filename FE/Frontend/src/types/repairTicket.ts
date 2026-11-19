@@ -2,9 +2,12 @@ export interface RepairTicket {
     id: number;
     ticketCode: string;
     customerId: number;
+    serviceId?: number | null;
+    serviceName?: string | null;
     customerName: string;
     device: string;
     receivedDate: string;
+    completedDate?: string | null;
     status: string;
     technicianId: number | null;
     technicianName: string | null;

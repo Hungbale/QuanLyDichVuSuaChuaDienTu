@@ -18,6 +18,7 @@ import {
     getServicesApi,
     updateServiceApi,
 } from "../../api/serviceApi";
+import { getRepairTicketsApi } from "../../api/repairTicketApi";
 
 import type { Category } from "../../types/category";
 import type {
@@ -57,6 +58,9 @@ function AdminServices() {
         useState<ServiceItem | null>(null);
     const [loadingServiceDetails, setLoadingServiceDetails] =
         useState(false);
+    const [serviceUsageCount, setServiceUsageCount] = useState<number | null>(null);
+    const [loadingServiceUsage, setLoadingServiceUsage] = useState(false);
+    const [serviceUsageError, setServiceUsageError] = useState("");
 
     const [editingService, setEditingService] =
         useState<ServiceItem | null>(null);
@@ -181,12 +185,28 @@ function AdminServices() {
     const openServiceDetails = async (service: ServiceItem) => {
         setShowServiceDetails(true);
         setServiceDetails(null);
+        setServiceUsageCount(null);
+        setServiceUsageError("");
         setLoadingServiceDetails(true);
+        setLoadingServiceUsage(true);
         setError("");
 
         try {
-            const details = await getServiceByIdApi(service.id);
+            const [detailsResult, ticketsResult] = await Promise.allSettled([
+                getServiceByIdApi(service.id),
+                getRepairTicketsApi(),
+            ]);
+            if (detailsResult.status === "rejected") throw detailsResult.reason;
+            const details = detailsResult.value;
             setServiceDetails(details);
+            if (ticketsResult.status === "fulfilled") {
+                const excludedStatuses = new Set(["CANCELLED", "CUSTOMER_DECLINED"]);
+                setServiceUsageCount(ticketsResult.value.filter((ticket) =>
+                    ticket.serviceId === details.id && !excludedStatuses.has(ticket.status.toUpperCase()),
+                ).length);
+            } else {
+                setServiceUsageError("Không thể tải số lượt sử dụng dịch vụ.");
+            }
         } catch (error: any) {
             console.error(error);
             setError(
@@ -196,6 +216,7 @@ function AdminServices() {
             setShowServiceDetails(false);
         } finally {
             setLoadingServiceDetails(false);
+            setLoadingServiceUsage(false);
         }
     };
 
@@ -907,6 +928,18 @@ function AdminServices() {
                                         {serviceDetails.status === "ACTIVE"
                                             ? "Đang hoạt động"
                                             : "Ngừng hoạt động"}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Số lượt khách hàng sử dụng</dt>
+                                    <dd>
+                                        {loadingServiceUsage
+                                            ? "Đang tải..."
+                                            : serviceUsageError
+                                              ? serviceUsageError
+                                              : serviceUsageCount === null
+                                                ? "Chưa có dữ liệu"
+                                                : `${serviceUsageCount} lượt`}
                                     </dd>
                                 </div>
                                 <div className="service-details-description">

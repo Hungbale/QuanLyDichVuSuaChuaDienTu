@@ -24,21 +24,17 @@ import Payment from "../pages/customer/Payment";
 import RepairHistory from "../pages/customer/RepairHistory";
 import ServiceReview from "../pages/customer/ServiceReview";
 import WarrantyRequest from "../pages/customer/WarrantyRequest";
-import CustomerDashboard from "../pages/customer/CustomerDashboard";
 import CustomerServices from "../pages/customer/CustomerServices";
 
 // EMPLOYEE
-import EmployeeDashboard from "../pages/employee/Dashboard";
 import EmployeeProfile from "../pages/employee/Profile";
 import EmployeeRepairs from "../pages/employee/Repairs";
 import EmployeeQuotes from "../pages/employee/Quotes";
 import EmployeeAppointments from "../pages/employee/Appointments";
 import EmployeeRepairProcess from "../pages/employee/RepairProcess";
 import EmployeeCompleteRepair from "../pages/employee/CompleteRepair";
-import EmployeePayments from "../pages/employee/Payments";
 
 // ADMIN
-import AdminDashboard from "../pages/admin/Dashboard";
 import AdminProfile from "../pages/admin/Profile";
 import AdminEmployees from "../pages/admin/Employees";
 import AdminServices from "../pages/admin/Services";
@@ -92,7 +88,7 @@ function AppRoutes() {
                     >
                         <Route
                             index
-                            element={<CustomerDashboard />}
+                            element={<Navigate to="services" replace />}
                         />
 
                         {/* 04 */}
@@ -173,7 +169,7 @@ function AppRoutes() {
                     >
                         <Route
                             index
-                            element={<EmployeeDashboard />}
+                            element={<Navigate to="appointments" replace />}
                         />
 
                         <Route
@@ -207,7 +203,7 @@ function AppRoutes() {
 
                         <Route
                             path="payments"
-                            element={<EmployeePayments />}
+                            element={<Navigate to="/employee/quotes" replace />}
                         />
 
                         {/* 20 */}
@@ -234,7 +230,7 @@ function AppRoutes() {
                     >
                         <Route
                             index
-                            element={<AdminDashboard />}
+                            element={<Navigate to="repairs" replace />}
                         />
 
                         <Route

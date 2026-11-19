@@ -7,7 +7,7 @@ import { getRepairQuoteApi } from "../../api/repairQuoteApi";
 import { getRepairDiagnosisApi } from "../../api/repairDiagnosisApi";
 import { getRepairIntakeApi } from "../../api/repairIntakeApi";
 import { getRepairTrackingApi } from "../../api/repairTrackingApi";
-import { getRepairFinalInspectionApi, saveRepairFinalInspectionApi } from "../../api/repairFinalInspectionApi";
+import { getRepairFinalInspectionApi } from "../../api/repairFinalInspectionApi";
 import type { RepairTicket, RepairTicketActivity } from "../../types/repairTicket";
 import type { RepairPayment } from "../../types/repairPayment";
 import type { RepairQuote } from "../../types/repairQuote";
@@ -17,6 +17,9 @@ import type { RepairFinalInspection } from "../../types/repairFinalInspection";
 import { repairActivityLabel } from "../../utils/repairActivityLabel";
 import { repairTrackingTitle } from "../../utils/repairTrackingTitle";
 import { statusLabel as translateStatus } from "../../utils/statusLabel";
+import { photosForRepairTimelineEvent } from "../../utils/repairTimelinePhotos";
+import { repairTimelineLines } from "../../utils/repairTimelineLines";
+import { isPastRepairTicket } from "../../utils/repairTicketPeriod";
 import DiagnosisModal from "./DiagnosisModal";
 
 const errorPayload = (error: unknown) => {
@@ -45,9 +48,6 @@ function EmployeeRepairs() {
     const [activeTab, setActiveTab] = useState<"current" | "past">("current");
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [loading, setLoading] = useState(true);
-    const [completingId, setCompletingId] = useState<number | null>(null);
-    const [actionError, setActionError] = useState("");
-    const [actionNotice, setActionNotice] = useState("");
     const [error, setError] = useState("");
 
     const load = useCallback(async (term?: string) => {
@@ -169,45 +169,6 @@ function EmployeeRepairs() {
         }
     };
 
-    const completeTicket = async (ticket: RepairTicket) => {
-        const inspection = inspectionsByTicket[ticket.id];
-        setActionError("");
-        setActionNotice("");
-        if (!inspection) {
-            setActionError("Phiếu chưa có kết quả kiểm tra được lưu.");
-            return;
-        }
-        if (!(inspection.deviceWorksNormally && inspection.mainFunctionsWork && inspection.noNewIssues) || !inspection.completionInfo?.trim()) {
-            setActionError("Kết quả kiểm tra chưa đạt đủ điều kiện để hoàn thành phiếu.");
-            return;
-        }
-        setCompletingId(ticket.id);
-        try {
-            const payments = await getRepairPaymentsApi(ticket.id).catch((e: unknown) => {
-                if (statusOf(e) === 404) return [];
-                throw e;
-            });
-            if (payments[0]?.status !== "PAID") {
-                setActionError("Chưa thể hoàn thành phiếu vì khách hàng chưa thanh toán hoặc giao dịch chưa được xác nhận.");
-                return;
-            }
-            if (!window.confirm(`Xác nhận hoàn thành phiếu ${ticket.ticketCode}?`)) return;
-            await saveRepairFinalInspectionApi(ticket.id, {
-                deviceWorksNormally: inspection.deviceWorksNormally,
-                mainFunctionsWork: inspection.mainFunctionsWork,
-                noNewIssues: inspection.noNewIssues,
-                completionInfo: inspection.completionInfo,
-                complete: true,
-            });
-            setActionNotice(`Đã hoàn thành phiếu ${ticket.ticketCode}.`);
-            await load(keyword);
-        } catch (e: unknown) {
-            setActionError(messageOf(e));
-        } finally {
-            setCompletingId(null);
-        }
-    };
-
     const nextAction = (ticket: RepairTicket) => {
         // Terminal ticket status must take precedence over an accepted quote.
         if (["COMPLETED", "Hoàn thành", "Đã kết thúc", "CANCELLED", "Đã hủy", "CUSTOMER_DECLINED", "Khách từ chối", "Khách đã từ chối"].includes(ticket.status)) {
@@ -221,7 +182,7 @@ function EmployeeRepairs() {
             }
             if (quote.status === "ACCEPTED") {
                 return inspectionsByTicket[ticket.id]
-                    ? <button className="primary-button" type="button" disabled={completingId === ticket.id} onClick={() => void completeTicket(ticket)}>{completingId === ticket.id ? "Đang hoàn thành..." : "Hoàn thành"}</button>
+                    ? <button className="primary-button" type="button" onClick={() => navigate(`/employee/repair-process?ticketId=${ticket.id}`)}>Hoàn thành</button>
                     : <button className="primary-button" type="button" onClick={() => navigate(`/employee/repair-process?ticketId=${ticket.id}`)}>Thực hiện sửa chữa</button>;
             }
             return <span>Đã gửi báo giá · chờ khách phản hồi</span>;
@@ -246,13 +207,13 @@ function EmployeeRepairs() {
         }
         if (ticket.status === "Đang sửa") {
             return inspectionsByTicket[ticket.id]
-                ? <button className="primary-button" type="button" disabled={completingId === ticket.id} onClick={() => void completeTicket(ticket)}>{completingId === ticket.id ? "Đang hoàn thành..." : "Hoàn thành"}</button>
+                ? <button className="primary-button" type="button" onClick={() => navigate(`/employee/repair-process?ticketId=${ticket.id}`)}>Hoàn thành</button>
                 : <button className="primary-button" type="button" onClick={() => navigate(`/employee/repair-process?ticketId=${ticket.id}`)}>Thực hiện sửa chữa</button>;
         }
         return <span>{["COMPLETED", "Hoàn thành", "Đã hủy", "CANCELLED", "Khách từ chối", "Khách đã từ chối", "CUSTOMER_DECLINED"].includes(ticket.status) ? "Đã kết thúc" : "—"}</span>;
     };
 
-    const isPastTicket = (ticket: RepairTicket) => ["COMPLETED", "Hoàn thành", "Đã kết thúc", "CANCELLED", "Đã hủy", "CUSTOMER_DECLINED", "Khách từ chối", "Khách đã từ chối"].includes(ticket.status);
+    const isPastTicket = isPastRepairTicket;
     const periodTickets = tickets.filter((ticket) => activeTab === "past" ? isPastTicket(ticket) : !isPastTicket(ticket));
     const statusOptions = [...new Set(periodTickets.map((ticket) => ticket.status))];
     const visibleTickets = periodTickets.filter((ticket) => statusFilter === "ALL" || ticket.status === statusFilter)
@@ -261,8 +222,8 @@ function EmployeeRepairs() {
     return <main className="management-page appointment-page">
         <header className="appointment-page-header"><span className="appointment-eyebrow">FIXHUB · NHÂN VIÊN</span><h1>Phiếu sửa chữa</h1><p>Danh sách phiếu được giao cho bạn. Tiếp nhận phiếu rồi chuyển sang chẩn đoán thiết bị.</p></header>
         {error && detailTicket && <div className="error-message" role="alert">{error}</div>}
-        {actionError && <div className="error-message" role="alert">{actionError}</div>}
-        {actionNotice && <div className="success-message" role="status">{actionNotice}</div>}
+
+
         <form className="appointment-search-panel" onSubmit={(e: FormEvent) => { e.preventDefault(); void load(keyword); }}><div className="appointment-form-group"><label htmlFor="employee-ticket-search">Tìm phiếu</label><input id="employee-ticket-search" type="search" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Mã phiếu, tên hoặc số điện thoại khách" /></div><div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => { setKeyword(""); void load(); }} disabled={loading}>Xóa lọc</button><button className="primary-button" type="submit" disabled={loading}>Tìm phiếu</button></div></form>
         <div className="appointment-tabs" role="tablist" aria-label="Phân loại phiếu sửa chữa"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => setActiveTab("current")}>Hiện tại <span>{tickets.filter((ticket) => !isPastTicket(ticket)).length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => setActiveTab("past")}>Đã qua <span>{tickets.filter(isPastTicket).length}</span></button></div>
         <div className="appointment-filter-row"><label htmlFor="employee-ticket-status">Lọc trạng thái</label><select id="employee-ticket-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{statusOptions.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
@@ -277,9 +238,8 @@ function EmployeeRepairs() {
             <section className="repair-detail-section"><h3>Báo giá</h3>{detailLoading ? <p>Đang tải báo giá...</p> : detailQuote ? <><p><strong>{detailQuote.quoteCode}</strong> · {detailQuote.status === "ACCEPTED" ? "Khách đã xác nhận" : detailQuote.status === "REJECTED" ? "Khách từ chối" : "Chờ khách xác nhận"}</p><ul>{detailQuote.items.map((item) => <li key={item.id}>{item.name} × {item.quantity} — {new Intl.NumberFormat("vi-VN").format(item.lineTotal)} ₫</li>)}</ul><p><strong>Tổng báo giá: {new Intl.NumberFormat("vi-VN").format(detailQuote.totalAmount)} ₫</strong></p></> : <p>Phiếu chưa có báo giá.</p>}</section>
             <section className="repair-detail-section"><h3>Thanh toán</h3>{(paymentsByTicket[detailTicket.id] || []).length ? (paymentsByTicket[detailTicket.id] || []).map((payment) => <p key={payment.id}>{payment.method === "BANK_TRANSFER" ? "Chuyển khoản" : "Tiền mặt"} · {new Intl.NumberFormat("vi-VN").format(payment.amount)} ₫ · {payment.status === "PAID" ? "Đã xác nhận thanh toán" : "Chờ xác nhận"}</p>) : <p>Chưa có yêu cầu thanh toán.</p>}</section>
             <section className="repair-detail-section"><h3>Lịch sử xử lý từ hệ thống</h3>{detailTracking?.timeline.length ? <ol className="repair-timeline">{detailTracking.timeline.map((event, index) => {
-                const update = detailTracking.updates.find((item) => item.createdAt === event.createdAt && item.status === event.details);
-                const photos = event.type === "DEVICE_RECEIVED" ? detailIntake?.photos || [] : update?.photos || [];
-                return <li className="repair-timeline-event" key={`${event.type}-${index}`}><span className="repair-timeline-marker" aria-hidden="true" /><div className="repair-timeline-content"><div className="repair-timeline-heading"><h4>{repairTrackingTitle(event.type, event.details)}</h4><time>{new Date(event.createdAt).toLocaleString("vi-VN")}</time></div>{event.details && event.type !== "STATUS_UPDATED" && <p>{event.details}</p>}{event.note && <p>{event.note}</p>}{event.actorName && <small>Thực hiện bởi: {event.actorName}</small>}{photos.length > 0 && <div className="repair-timeline-photos">{photos.map((photo, photoIndex) => <a key={`${event.type}-${photo.fileName}-${photoIndex}`} href={photo.dataUri} target="_blank" rel="noreferrer"><img src={photo.dataUri} alt={`Ảnh minh chứng ${photoIndex + 1}`} loading="lazy" /></a>)}</div>}</div></li>;
+                const photos = event.type === "DEVICE_RECEIVED" ? detailIntake?.photos || [] : photosForRepairTimelineEvent(event, detailTracking.updates);
+                return <li className="repair-timeline-event" key={`${event.type}-${index}`}><span className="repair-timeline-marker" aria-hidden="true" /><div className="repair-timeline-content"><div className="repair-timeline-heading"><h4>{repairTrackingTitle(event.type, event.details)}</h4><time>{new Date(event.createdAt).toLocaleString("vi-VN")}</time></div>{event.details && event.type !== "STATUS_UPDATED" && repairTimelineLines(event.details).map((line, lineIndex) => <p key={`${event.type}-detail-${lineIndex}`}>{line}</p>)}{repairTimelineLines(event.note).map((line, lineIndex) => <p key={`${event.type}-note-${lineIndex}`}>{line}</p>)}{event.actorName && <small>Thực hiện bởi: {event.actorName}</small>}{photos.length > 0 && <div className="repair-timeline-photos">{photos.map((photo, photoIndex) => <a key={`${event.type}-${photo.fileName}-${photoIndex}`} href={photo.dataUri} target="_blank" rel="noreferrer"><img src={photo.dataUri} alt={`Ảnh minh chứng ${photoIndex + 1}`} loading="lazy" /></a>)}</div>}</div></li>;
             })}</ol> : detailActivities.length ? <ol className="repair-timeline">{detailActivities.map((activity) => <li className="repair-timeline-event" key={activity.id}><span className="repair-timeline-marker" aria-hidden="true" /><div className="repair-timeline-content"><div className="repair-timeline-heading"><h4>{repairActivityLabel(activity)}</h4><time>{new Date(activity.createdAt).toLocaleString("vi-VN")}</time></div>{activity.note && <p>{activity.note}</p>}{activity.employeeName && <small>Thực hiện bởi: {activity.employeeName}</small>}</div></li>)}</ol> : <p>Chưa có hoạt động được ghi nhận.</p>}</section>
         </section></div>}
         {diagnosisTicket && <DiagnosisModal ticket={diagnosisTicket} onClose={() => setDiagnosisTicket(null)} onSaved={() => void load(keyword)} />}

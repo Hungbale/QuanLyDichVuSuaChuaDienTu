@@ -38,7 +38,7 @@ export const getMyAssignedAppointmentGroupsApi = async (): Promise<AssignedAppoi
         // still authorize only /assigned/me for employees. Keep the workflow usable.
         if (!axios.isAxiosError(error) || error.response?.status !== 403) throw error;
         const appointments = await getMyAssignedAppointmentsApi();
-        const actionRequired = appointments.filter((item) => ["PENDING", "CONFIRMED", "CANCELLATION_REQUESTED"].includes(item.status));
+        const actionRequired = appointments.filter((item) => ["PENDING", "CONFIRMED"].includes(item.status));
         const received = appointments.filter((item) => item.status === "RECEIVED");
         const other = appointments.filter((item) => !["PENDING", "CONFIRMED", "CANCELLATION_REQUESTED", "RECEIVED"].includes(item.status));
         return { actionRequired, received, other };

@@ -10,6 +10,8 @@ import type { RepairHistoryEntry } from "../../types/repairTicket";
 import type { RepairTrackingDetails } from "../../types/repairTracking";
 import { statusLabel } from "../../utils/statusLabel";
 import { repairTrackingTitle } from "../../utils/repairTrackingTitle";
+import { photosForRepairTimelineEvent } from "../../utils/repairTimelinePhotos";
+import { repairTimelineLines } from "../../utils/repairTimelineLines";
 
 type TimelineEvent = {
     id: string;
@@ -145,16 +147,13 @@ function RepairTracking() {
         if (!selected) return [];
         if (tracking?.timeline?.length) {
             return tracking.timeline.map((event, index) => {
-                const matchingUpdate = tracking.updates.find((update) =>
-                    update.createdAt === event.createdAt && update.status === event.details,
-                );
                 return {
                     id: `${event.type}-${index}`,
                     title: repairTrackingTitle(event.type, event.details),
                     date: event.createdAt,
                     description: [event.details, event.note].filter(Boolean).join("\n"),
                     actor: event.actorName,
-                    photos: matchingUpdate?.photos.map((photo) => ({ fileName: photo.fileName, dataUri: photo.dataUri })),
+                    photos: photosForRepairTimelineEvent(event, tracking.updates).map((photo) => ({ fileName: photo.fileName, dataUri: photo.dataUri })),
                 };
             });
         }
@@ -209,7 +208,7 @@ function RepairTracking() {
         </form>
         <div className="appointment-results-heading"><div><h2>Phiếu sửa chữa của tôi</h2><p>{loading ? "Đang tải..." : `${filteredItems.length} phiếu`}</p></div></div>
         {loading ? <div className="appointment-panel table-state">Đang tải tiến trình sửa chữa...</div> : error ? (
-            <div className="appointment-panel appointment-empty-state"><h2>Không tải được phiếu</h2><p>{error}</p><button className="secondary-button" type="button" onClick={() => { setLoading(true); setError(""); getMyRepairHistoryApi().then(setItems).catch((requestError: unknown) => setError(messageOf(requestError))).finally(() => setLoading(false)); }}>Thử tải lại</button></div>
+            <div className="appointment-panel appointment-empty-state error-message"><h2>Không tải được phiếu</h2><p>{error}</p><button className="secondary-button" type="button" onClick={() => { setLoading(true); setError(""); getMyRepairHistoryApi().then(setItems).catch((requestError: unknown) => setError(messageOf(requestError))).finally(() => setLoading(false)); }}>Thử tải lại</button></div>
         ) : items.length === 0 ? (
             <div className="appointment-panel appointment-empty-state"><h2>Chưa có phiếu sửa chữa</h2><p>Phiếu sẽ xuất hiện tại đây khi thiết bị được tiếp nhận.</p></div>
         ) : filteredItems.length === 0 ? (
@@ -232,7 +231,7 @@ function RepairTracking() {
                     {timeline.length === 0 ? <div className="appointment-empty-state"><p>Chưa có mốc tiến độ được ghi nhận.</p></div> : <ol className="repair-timeline">{timeline.map((event) => <li className="repair-timeline-event" key={event.id}>
                         <span className="repair-timeline-marker" aria-hidden="true" />
                         <div className="repair-timeline-content"><div className="repair-timeline-heading"><h3>{event.title}</h3><time>{event.date ? formatDateTime(event.date) : "Chưa có thời điểm"}</time></div>
-                            {event.description?.split(/\r?\n/).map((line, index) => line.trim() ? <p key={`${event.id}-detail-${index}`}>{line.trim()}</p> : null)}{event.actor && <small>Thực hiện bởi: {event.actor}</small>}
+                            {repairTimelineLines(event.description).map((line, index) => <p key={`${event.id}-detail-${index}`}>{line}</p>)}{event.actor && <small>Thực hiện bởi: {event.actor}</small>}
                             {event.photos && event.photos.length > 0 && <div className="repair-timeline-photos">{event.photos.map((photo, index) => <button className="repair-timeline-photo-button" type="button" key={`${photo.fileName}-${index}`} onClick={() => setPreviewPhoto(photo)} aria-label={`Xem ảnh bằng chứng ${event.title}`}><img src={photo.dataUri} alt={`Bằng chứng ${event.title}`} loading="lazy" /></button>)}</div>}
                         </div>
                     </li>)}</ol>}
