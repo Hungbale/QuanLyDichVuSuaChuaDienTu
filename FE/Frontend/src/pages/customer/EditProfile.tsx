@@ -181,27 +181,29 @@ function EditProfile() {
 
     if (loading) {
         return (
-            <div className="profile-page">
-                <div className="page-header">
+            <div className="management-page appointment-page profile-page">
+                <header className="appointment-page-header">
+                    <span className="appointment-eyebrow">FIXHUB · KHÁCH HÀNG</span>
                     <h1>Thông tin cá nhân</h1>
                     <p>
                         Đang tải thông tin...
                     </p>
-                </div>
+                </header>
             </div>
         );
     }
 
     return (
-        <div className="profile-page">
-            <div className="page-header">
+        <div className="management-page appointment-page profile-page">
+            <header className="appointment-page-header">
+                <span className="appointment-eyebrow">FIXHUB · KHÁCH HÀNG</span>
                 <h1>Thông tin cá nhân</h1>
 
                 <p>
                     Xem và cập nhật thông tin tài khoản
                     của bạn.
                 </p>
-            </div>
+            </header>
 
             <div className="profile-card">
                 {customer && (
@@ -333,16 +335,25 @@ function EditProfile() {
                             <div className="profile-actions">
                                 {isEditing ? (
                                     <>
-                                        <button type="submit" className="primary-button" disabled={saving}>
-                                            <Save size={16} />
-                                            {saving ? "Đang lưu..." : "Lưu thay đổi"}
-                                        </button>
                                         <button type="button" className="secondary-button" onClick={handleCancelEdit} disabled={saving}>
                                             <X size={16} /> Hủy
                                         </button>
+                                        <button type="submit" className="primary-button" disabled={saving}>
+                                            <Save size={16} />
+                                            {saving ? "Đang cập nhật..." : "Cập nhật"}
+                                        </button>
                                     </>
                                 ) : (
-                                    <button type="button" className="primary-button" onClick={() => { setNotice(null); setIsEditing(true); }}>
+                                    <button type="button" className="primary-button" onClick={() => {
+                                        if (customer) {
+                                            setFullName(customer.fullName);
+                                            setEmail(user?.email ?? customer.email ?? "");
+                                            setPhone(customer.phone);
+                                            setAddress(customer.address);
+                                        }
+                                        setNotice(null);
+                                        setIsEditing(true);
+                                    }}>
                                         <Pencil size={16} /> Chỉnh sửa thông tin
                                     </button>
                                 )}

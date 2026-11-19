@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import EmployeeReceiveDevice from "./ReceiveDeviceModal";
-import { getAppointmentCancellationRequestsApi, getMyAssignedAppointmentGroupsApi, reviewAppointmentCancellationApi } from "../../api/appointmentApi";
-import type { AppointmentCancellationRequestRecord, AssignedAppointment } from "../../types/appointment";
+import { getMyAssignedAppointmentGroupsApi } from "../../api/appointmentApi";
+import type { AssignedAppointment } from "../../types/appointment";
 import { statusLabel } from "../../utils/statusLabel";
 
 function EmployeeAppointments() {
@@ -12,9 +12,7 @@ function EmployeeAppointments() {
     const [activeTab, setActiveTab] = useState<"assigned" | "received">("assigned");
     const [appointments, setAppointments] = useState<AssignedAppointment[]>([]);
     const [receivedAppointments, setReceivedAppointments] = useState<AssignedAppointment[]>([]);
-    const [cancellationRequests, setCancellationRequests] = useState<AppointmentCancellationRequestRecord[]>([]);
     const [viewingAppointment, setViewingAppointment] = useState<AssignedAppointment | null>(null);
-    const [workingId, setWorkingId] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -23,10 +21,7 @@ function EmployeeAppointments() {
         setLoading(true);
         setError("");
         try {
-            const [groups, cancellations] = await Promise.all([
-                getMyAssignedAppointmentGroupsApi(),
-                getAppointmentCancellationRequestsApi(),
-            ]);
+            const groups = await getMyAssignedAppointmentGroupsApi();
             const query = contactPhone?.trim() || "";
             const normalizedQuery = query.toLocaleLowerCase("vi");
             const matchesCustomer = (appointment: AssignedAppointment) => !query
@@ -34,9 +29,8 @@ function EmployeeAppointments() {
                 || appointment.contactPhone.includes(query);
             const newestFirst = (items: AssignedAppointment[]) => [...items].sort((a, b) =>
                 `${b.appointmentDate}T${b.appointmentTime}`.localeCompare(`${a.appointmentDate}T${a.appointmentTime}`) || b.id - a.id);
-            setAppointments(newestFirst(groups.actionRequired.filter(matchesCustomer)));
+            setAppointments(newestFirst(groups.actionRequired.filter((appointment) => appointment.status !== "CANCELLATION_REQUESTED").filter(matchesCustomer)));
             setReceivedAppointments(newestFirst(groups.received.filter(matchesCustomer)));
-            setCancellationRequests(cancellations);
         } catch (requestError: any) {
             setError(requestError.response?.data?.message || "Không thể tải danh sách lịch hẹn.");
         } finally {
@@ -65,13 +59,6 @@ function EmployeeAppointments() {
     const handleReset = () => {
         setSearchQuery("");
         void loadAppointments();
-    };
-
-    const reviewCancellation = async (id: number, decision: "APPROVE" | "REJECT") => {
-        setWorkingId(id); setError("");
-        try { await reviewAppointmentCancellationApi(id, decision); await loadAppointments(searchQuery); }
-        catch (requestError: any) { setError(requestError.response?.data?.message || "Không thể xử lý yêu cầu hủy."); }
-        finally { setWorkingId(null); }
     };
 
     return (
@@ -167,10 +154,6 @@ function EmployeeAppointments() {
             ) : (
                 <div className="appointment-panel appointment-table-container"><table className="appointment-table"><thead><tr><th>{"L\u1ecbch h\u1eb9n"}</th><th>{"Kh\u00e1ch"}</th><th>{"Thi\u1ebft b\u1ecb / d\u1ecbch v\u1ee5"}</th><th>{"Th\u1eddi gian"}</th><th>{"Tr\u1ea1ng th\u00e1i"}</th><th></th></tr></thead><tbody>{receivedAppointments.map((appointment) => <tr key={appointment.id}><td>#{appointment.id}</td><td>{appointment.customerName || appointment.contactPhone}</td><td>{appointment.device}<span>{appointment.serviceName}</span></td><td>{new Date(`${appointment.appointmentDate}T00:00:00`).toLocaleDateString("vi-VN")} {"\u00b7"} {appointment.appointmentTime.slice(0, 5)}</td><td><span className="appointment-status confirmed">{"\u0110\u00e3 ti\u1ebfp nh\u1eadn"}</span></td><td><button className="secondary-button" type="button" onClick={() => setViewingAppointment(appointment)}>{"Xem chi ti\u1ebft"}</button></td></tr>)}</tbody></table></div>
             )}
-            {cancellationRequests.length > 0 && <>
-                <div className="appointment-results-heading"><div><h2>Yêu cầu hủy lịch</h2><p>{cancellationRequests.length} yêu cầu</p></div></div>
-                <div className="appointment-panel appointment-table-container"><table className="appointment-table"><thead><tr><th>Lịch hẹn</th><th>Khách</th><th>Thiết bị</th><th>Lý do</th><th>Thao tác</th></tr></thead><tbody>{cancellationRequests.map((request) => <tr key={request.appointmentId}><td>#{request.appointmentId}<span>{new Date(`${request.appointmentDate}T00:00:00`).toLocaleDateString("vi-VN")}</span></td><td>{request.customerName}</td><td>{request.device}</td><td>{request.cancellationReason}</td><td><div className="repair-ticket-actions"><button className="primary-button" type="button" disabled={workingId === request.appointmentId} onClick={() => void reviewCancellation(request.appointmentId, "APPROVE")}>Duyệt</button><button className="secondary-button" type="button" disabled={workingId === request.appointmentId} onClick={() => void reviewCancellation(request.appointmentId, "REJECT")}>Từ chối</button></div></td></tr>)}</tbody></table></div>
-            </>}
             {intakeTarget && <EmployeeReceiveDevice
                 appointmentId={intakeTarget.appointmentId}
                 ticketId={intakeTarget.ticketId}

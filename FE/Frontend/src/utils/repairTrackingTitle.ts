@@ -1,4 +1,19 @@
-export function repairTrackingTitle(type: string, details: string | null): string {
+export function repairTrackingTitle(type: string, details: string | null, title?: string | null): string {
+    const normalizedType = type.trim().toUpperCase();
+    const detailText = details?.trim() || "";
+    const combinedText = `${detailText} ${title || ""}`;
+    if (/^COMPLETED\b/i.test(detailText)
+        || (/thiết bị hoạt động bình thường\s*:\s*true/i.test(combinedText)
+            && /chức năng chính hoạt động\s*:\s*true/i.test(combinedText)
+            && /không có lỗi phát sinh\s*:\s*true/i.test(combinedText))) {
+        return "Hoàn thành sửa chữa";
+    }
+    if (normalizedType.includes("STATUS") || normalizedType.includes("PROGRESS")) {
+        const status = details?.trim().match(/^(SCHEDULED|RECEIVED|DIAGNOSING|WAITING_FOR_QUOTE_APPROVAL|REPAIRING|IN_PROGRESS|WAITING_FOR_PARTS|CANNOT_BE_REPAIRED|CUSTOMER_DECLINED|COMPLETED|CANCELLED)\b/i)?.[0];
+        if (status) return `Cập nhật tiến độ: ${status.toUpperCase()}`;
+        if (title?.trim()) return title.trim();
+        return details?.trim() ? `Cập nhật tiến độ: ${details.trim()}` : "Cập nhật tiến độ sửa chữa";
+    }
     const labels: Record<string, string> = {
         DEVICE_RECEIVED: "Tiếp nhận thiết bị",
         DIAGNOSIS_RECORDED: "Chẩn đoán thiết bị",
@@ -16,5 +31,5 @@ export function repairTrackingTitle(type: string, details: string | null): strin
         PAYMENT_PAID: "Đã xác nhận thanh toán",
         TICKET_COMPLETED: "Hoàn thành sửa chữa",
     };
-    return labels[type] || "Cập nhật tiến độ sửa chữa";
+    return labels[type] || title?.trim() || (details?.trim() ? `Cập nhật tiến độ: ${details.trim()}` : "Cập nhật tiến độ sửa chữa");
 }

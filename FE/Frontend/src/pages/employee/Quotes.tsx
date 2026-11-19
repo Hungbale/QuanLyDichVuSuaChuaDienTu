@@ -6,6 +6,7 @@ import { getRepairTicketsApi } from "../../api/repairTicketApi";
 import { getServicesApi } from "../../api/serviceApi";
 import { confirmRepairPaymentApi, getRepairPaymentsApi } from "../../api/repairPaymentApi";
 import { statusLabel } from "../../utils/statusLabel";
+import { isQuoteReadyForEmployee } from "../../utils/employeeQuoteStatus";
 import type { RepairQuoteItemRequest } from "../../types/repairQuote";
 import type { RepairPayment } from "../../types/repairPayment";
 import type { RepairTicket } from "../../types/repairTicket";
@@ -17,7 +18,7 @@ const money = (amount: number) => `${new Intl.NumberFormat("vi-VN").format(amoun
 const messageOf = (error: any) => error.response?.data?.message || error.response?.data?.error || "Không thể xử lý báo giá.";
 // Saving a diagnosis makes the backend set the ticket status to DIAGNOSING
 // (displayed as "Đang kiểm tra"). That is the state from which a quote can be created.
-const quoteReady = (status: string) => ["DIAGNOSING", "Đang kiểm tra", "Đã kiểm tra", "Chờ báo giá", "Đã báo giá"].includes(status);
+const quoteReady = isQuoteReadyForEmployee;
 const quoteWaiting = (status: string) => ["Chờ xác nhận báo giá", "Chờ khách xác nhận"].includes(status);
 
 function EmployeeQuotes() {

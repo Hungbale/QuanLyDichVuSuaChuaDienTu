@@ -39,6 +39,9 @@ function EmployeeRepairProcess() {
     const [progressNote, setProgressNote] = useState("");
     const [evidencePhoto, setEvidencePhoto] = useState<File | null>(null);
     const [completionReviewOpen, setCompletionReviewOpen] = useState(false);
+    const [completionSubmitOpen, setCompletionSubmitOpen] = useState(false);
+    const [completionInfo, setCompletionInfo] = useState("");
+    const [completionEvidence, setCompletionEvidence] = useState<File | null>(null);
     const [inspectionSaved, setInspectionSaved] = useState(false);
     const [inspectionResult, setInspectionResult] = useState("");
     const [inspectionNote, setInspectionNote] = useState("");
@@ -51,10 +54,8 @@ function EmployeeRepairProcess() {
     const [loading, setLoading] = useState(true);
     const [savingId, setSavingId] = useState<number | null>(null);
     const [error, setError] = useState("");
-    const [actionError, setActionError] = useState("");
     const [notice, setNotice] = useState("");
     const autoOpenedTicketId = useRef<number | null>(null);
-    const autoCloseTimer = useRef<number | undefined>(undefined);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -115,12 +116,14 @@ function EmployeeRepairProcess() {
     const requestedTicketIsActive = !requestedTicketId || activeTickets.some((ticket) => ticket.id === requestedTicketId);
 
     const openUpdate = async (ticket: RepairTicket) => {
-        window.clearTimeout(autoCloseTimer.current);
         setEditingTicket(ticket);
         setNotice("");
         setProgressNote("");
         setEvidencePhoto(null);
         setCompletionReviewOpen(false);
+        setCompletionSubmitOpen(false);
+        setCompletionInfo("");
+        setCompletionEvidence(null);
         setInspectionSaved(false);
         setInspectionResult("");
         setInspectionNote("");
@@ -151,6 +154,8 @@ function EmployeeRepairProcess() {
                 setInspectionSaved(true);
                 setInspectionSavedNotice("Đã lưu kết quả kiểm tra sau sửa chữa.");
                 setCompletionReviewOpen(true);
+                setCompletionSubmitOpen(true);
+                setCompletionInfo(inspection.completionInfo || "");
             } else {
                 setInspectionByTicket((current) => ({ ...current, [ticket.id]: false }));
             }
@@ -174,11 +179,14 @@ function EmployeeRepairProcess() {
     }, [loading, requestedTicketId, tickets]);
 
     const closeUpdate = () => {
-        window.clearTimeout(autoCloseTimer.current);
         setEditingTicket(null);
+        setError("");
         setProgressNote("");
         setEvidencePhoto(null);
         setCompletionReviewOpen(false);
+        setCompletionSubmitOpen(false);
+        setCompletionInfo("");
+        setCompletionEvidence(null);
         setInspectionSaved(false);
         setInspectionResult("");
         setInspectionNote("");
@@ -208,23 +216,45 @@ function EmployeeRepairProcess() {
         setCompletionReviewOpen(true);
     };
 
+    const openCompletionForm = () => {
+        if (!inspectionSaved || !Object.values(inspectionChecks).every(Boolean)) {
+            setError("Vui lòng lưu kết quả kiểm tra đạt yêu cầu trước khi hoàn thành phiếu.");
+            return;
+        }
+        setCompletionInfo([inspectionResult.trim(), inspectionNote.trim()].filter(Boolean).join("\n\n"));
+        setCompletionEvidence(null);
+        setError("");
+        setCompletionSubmitOpen(true);
+    };
+
     const finishRepair = async () => {
         if (!editingTicket) return;
         if (!inspectionSaved) {
             setError("Vui lòng lưu kết quả kiểm tra trước khi hoàn thành sửa chữa.");
             return;
         }
-        if (!inspectionResult.trim()) {
-            setError("Vui lòng nhập kết quả kiểm tra sau sửa chữa.");
-            return;
-        }
         if (!Object.values(inspectionChecks).every(Boolean)) {
             setError("Chỉ có thể hoàn thành khi cả ba tiêu chí kiểm tra đều đạt.");
             return;
         }
-        const completionNote = [progressNote.trim() ? `Thông tin sửa chữa: ${progressNote.trim()}` : "", `Kết quả kiểm tra sau sửa chữa: ${inspectionResult.trim()}`, inspectionNote.trim() ? `Ghi chú kiểm tra: ${inspectionNote.trim()}` : ""].filter(Boolean).join("\n");
-        if (completionNote.length > 5000) {
-            setError("Tổng nội dung kiểm tra không được vượt quá 5.000 ký tự.");
+        if (!inspectionResult.trim()) {
+            setError("Vui lòng nhập kết quả kiểm tra sau sửa chữa.");
+            return;
+        }
+        if (!completionInfo.trim()) {
+            setError("Vui lòng nhập nội dung xác nhận hoàn thành sửa chữa.");
+            return;
+        }
+        if (completionInfo.trim().length > 2000) {
+            setError("Nội dung hoàn thành không được vượt quá 2.000 ký tự.");
+            return;
+        }
+        if (!completionEvidence) {
+            setError("Vui lòng tải ảnh minh chứng hoàn thành sửa chữa.");
+            return;
+        }
+        if (!/^image\/(jpeg|png)$/.test(completionEvidence.type) || completionEvidence.size > 5 * 1024 * 1024) {
+            setError("Ảnh minh chứng phải là JPEG hoặc PNG và không vượt quá 5 MB.");
             return;
         }
         setSavingId(editingTicket.id);
@@ -234,13 +264,16 @@ function EmployeeRepairProcess() {
             const latestPayments = await getRepairPaymentsApi(editingTicket.id);
             setPaymentsByTicket((current) => ({ ...current, [editingTicket.id]: latestPayments }));
             if (!latestPayments.some((payment) => payment.status === "PAID")) {
-                setError("Chưa thể hoàn thành: khách chưa được xác nhận đã thanh toán tại mục Thanh toán.");
+                setError("Chưa thể hoàn thành: khách chưa được xác nhận đã thanh toán tại mục Báo giá.");
                 return;
             }
             if (!window.confirm(`Xác nhận hoàn thành sửa chữa phiếu ${editingTicket.ticketCode}?`)) return;
+            // The current Backend has no photo field on final-inspection. Save the required
+            // evidence against the current repair status, then complete via its dedicated API.
+            await updateRepairTicketStatusApi(editingTicket.id, editingTicket.status, [completionEvidence], completionInfo.trim());
             await saveRepairFinalInspectionApi(editingTicket.id, {
                 ...inspectionChecks,
-                completionInfo: completionNote,
+                completionInfo: completionInfo.trim(),
                 complete: true,
             });
             setNotice(`Đã hoàn thành sửa chữa phiếu ${editingTicket.ticketCode}.`);
@@ -253,43 +286,6 @@ function EmployeeRepairProcess() {
         }
     };
 
-    const completeTicketFromList = async (ticket: RepairTicket) => {
-        setSavingId(ticket.id);
-        setActionError("");
-        setNotice("");
-        try {
-            const [inspection, payments] = await Promise.all([
-                getRepairFinalInspectionApi(ticket.id),
-                getRepairPaymentsApi(ticket.id).catch((requestError: unknown) => {
-                    if (statusOf(requestError) === 404) return [];
-                    throw requestError;
-                }),
-            ]);
-            setPaymentsByTicket((current) => ({ ...current, [ticket.id]: payments }));
-            if (payments[0]?.status !== "PAID") {
-                setActionError("Chưa thể hoàn thành phiếu vì khách hàng chưa thanh toán hoặc giao dịch chưa được xác nhận.");
-                return;
-            }
-            if (!(inspection.deviceWorksNormally && inspection.mainFunctionsWork && inspection.noNewIssues) || !inspection.completionInfo?.trim()) {
-                setActionError("Phiếu chưa có kết quả kiểm tra đầy đủ để hoàn thành.");
-                return;
-            }
-            if (!window.confirm(`Xác nhận hoàn thành phiếu ${ticket.ticketCode}?`)) return;
-            await saveRepairFinalInspectionApi(ticket.id, {
-                deviceWorksNormally: inspection.deviceWorksNormally,
-                mainFunctionsWork: inspection.mainFunctionsWork,
-                noNewIssues: inspection.noNewIssues,
-                completionInfo: inspection.completionInfo,
-                complete: true,
-            });
-            setNotice(`Đã hoàn thành phiếu ${ticket.ticketCode}.`);
-            await load();
-        } catch (requestError: unknown) {
-            setActionError(messageOf(requestError));
-        } finally {
-            setSavingId(null);
-        }
-    };
     const saveFinalInspection = async () => {
         if (!editingTicket || !validateUpdate()) return;
         if (!inspectionResult.trim()) {
@@ -315,6 +311,8 @@ function EmployeeRepairProcess() {
             setInspectionSaved(true);
             setInspectionByTicket((current) => ({ ...current, [editingTicket.id]: true }));
             setEvidencePhoto(null);
+            setNotice("Đã lưu kết quả kiểm tra sau sửa chữa.");
+            closeUpdate();
             await load();
         } catch (requestError: unknown) {
             setError(messageOf(requestError));
@@ -333,11 +331,8 @@ function EmployeeRepairProcess() {
             setInspectionSaved(false);
             setProgressNote("");
             setEvidencePhoto(null);
+            closeUpdate();
             await load();
-            autoCloseTimer.current = window.setTimeout(() => {
-                closeUpdate();
-                setNotice("");
-            }, 1500);
         } catch (requestError: unknown) {
             setError(messageOf(requestError));
         } finally {
@@ -352,7 +347,6 @@ function EmployeeRepairProcess() {
             <p>Theo dõi các hạng mục khách đã xác nhận và cập nhật tiến độ sửa chữa.</p>
         </header>
         {error && editingTicket && <div className="error-message" role="alert">{error}</div>}
-        {actionError && <div className="error-message" role="alert">{actionError}</div>}
         {notice && !editingTicket && <div className="success-message" role="status">{notice}</div>}
         {requestedTicketId > 0 && !loading && !error && !requestedTicketIsActive && <div className="error-message" role="alert">Phiếu này chưa được khách xác nhận hoặc đã chuyển sang bước khác.</div>}
         <div className="appointment-results-heading"><div><h2>Các hạng mục đang sửa chữa</h2><p>{loading ? "Đang tải..." : `${activeTickets.length} phiếu`}</p></div></div>
@@ -372,7 +366,7 @@ function EmployeeRepairProcess() {
                     <td><strong>{ticket.customerName}</strong><span>{ticket.device}</span></td>
                     <td>{quoteItems[ticket.id]?.length ? <ul className="repair-active-items">{quoteItems[ticket.id].map((item) => <li key={item.id}>{item.name}<span> × {item.quantity}</span></li>)}</ul> : <span>Chưa có thông tin hạng mục</span>}</td>
                     <td>{new Date(`${ticket.receivedDate}T00:00:00`).toLocaleDateString("vi-VN")}</td><td><span className="appointment-status">{statusLabel(ticket.status)}</span></td>
-                    <td><button className="primary-button" type="button" disabled={savingId === ticket.id} onClick={() => inspectionByTicket[ticket.id] ? void completeTicketFromList(ticket) : void openUpdate(ticket)}>{savingId === ticket.id ? "Đang xử lý..." : inspectionByTicket[ticket.id] ? "Hoàn thành" : "Cập nhật"}</button></td>
+                    <td><button className="primary-button" type="button" disabled={savingId === ticket.id} onClick={() => void openUpdate(ticket)}>{savingId === ticket.id ? "Đang xử lý..." : inspectionByTicket[ticket.id] ? "Hoàn thành" : "Cập nhật"}</button></td>
                 </tr>)}</tbody>
             </table></div>
         )}
@@ -385,6 +379,14 @@ function EmployeeRepairProcess() {
                 {!completionReviewOpen ? <>
                     <div className="appointment-form-group"><label htmlFor="repair-progress-note">Thông tin sửa chữa đã thực hiện</label><textarea id="repair-progress-note" required maxLength={1800} rows={5} value={progressNote} onChange={(event) => { setProgressNote(event.target.value); setInspectionSaved(false); }} placeholder="Mô tả hạng mục đã thực hiện, linh kiện đã thay hoặc tiến độ hiện tại..." /></div>
                     <div className="repair-progress-modal-actions"><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={closeUpdate}>Hủy</button><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={() => void saveProgress()}>{savingId === editingTicket.id ? "Đang lưu..." : "Lưu tiến độ"}</button><button className="primary-button" type="button" disabled={savingId === editingTicket.id} onClick={beginCompletionReview}>Kiểm tra</button></div>
+                </> : completionSubmitOpen ? <>
+                    <section className="repair-completion-review">
+                        <h3>Xác nhận hoàn thành sửa chữa</h3>
+                        <p>Ghi nội dung hoàn tất và tải ảnh minh chứng trước khi kết thúc phiếu.</p>
+                        <div className="appointment-form-group"><label htmlFor="repair-completion-info">Nội dung hoàn thành</label><textarea id="repair-completion-info" required maxLength={2000} rows={5} value={completionInfo} onChange={(event) => setCompletionInfo(event.target.value)} placeholder="Mô tả kết quả sửa chữa và tình trạng thiết bị sau khi hoàn tất..." /></div>
+                        <div className="appointment-form-group"><label htmlFor="repair-completion-photo">Ảnh minh chứng hoàn thành</label><input id="repair-completion-photo" type="file" accept="image/jpeg,image/png" required onChange={(event) => setCompletionEvidence(event.target.files?.[0] || null)} /><small>Bắt buộc 1 ảnh JPEG hoặc PNG, tối đa 5 MB.</small></div>
+                    </section>
+                    <div className="repair-progress-modal-actions"><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={closeUpdate}>Hủy</button><button className="primary-button" type="button" disabled={savingId === editingTicket.id} onClick={() => void finishRepair()}>{savingId === editingTicket.id ? "Đang hoàn thành..." : "Xác nhận hoàn thành"}</button></div>
                 </> : <>
                     <section className="repair-completion-review"><h3>Kiểm tra sau sửa chữa</h3><p>Ghi lại kết quả kiểm tra. Chỉ xác nhận hoàn thành khi cả ba tiêu chí đều đạt.</p><div className="repair-completion-summary"><strong>Nội dung sửa chữa</strong><p>{progressNote}</p></div>
                         <fieldset className="repair-inspection-checklist"><legend>Danh sách kiểm tra bắt buộc</legend>
@@ -396,10 +398,10 @@ function EmployeeRepairProcess() {
                         <div className="appointment-form-group"><label htmlFor="repair-inspection-note">Ghi chú kiểm tra</label><textarea id="repair-inspection-note" maxLength={1000} rows={2} value={inspectionNote} onChange={(event) => { setInspectionNote(event.target.value); setInspectionSaved(false); }} placeholder="Ghi chú thêm nếu cần" /></div>
                         {inspectionSavedNotice && <div className="success-message" role="status">{inspectionSavedNotice}</div>}
                     </section>
-                    <div className="repair-progress-modal-actions"><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={() => setCompletionReviewOpen(false)}>Quay lại</button><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={closeUpdate}>Hủy</button><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={() => void saveFinalInspection()}>{savingId === editingTicket.id ? "Đang lưu..." : "Lưu kết quả kiểm tra"}</button>{inspectionSaved && <button className="primary-button" type="button" disabled={savingId === editingTicket.id} onClick={() => void finishRepair()}>{savingId === editingTicket.id ? "Đang hoàn thành..." : "Hoàn thành"}</button>}</div>
+                    <div className="repair-progress-modal-actions"><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={closeUpdate}>Hủy</button><button className="secondary-button" type="button" disabled={savingId === editingTicket.id} onClick={() => void saveFinalInspection()}>{savingId === editingTicket.id ? "Đang lưu..." : "Lưu kết quả kiểm tra"}</button>{inspectionSaved && <button className="primary-button" type="button" disabled={savingId === editingTicket.id} onClick={openCompletionForm}>Hoàn thành</button>}</div>
                 </>}
-                <div className="appointment-form-group"><label htmlFor="repair-progress-photo">Ảnh bằng chứng</label><input id="repair-progress-photo" type="file" accept="image/jpeg,image/png" onChange={(event) => setEvidencePhoto(event.target.files?.[0] || null)} /><small>Bắt buộc tải ảnh JPEG hoặc PNG, tối đa 5 MB. Ảnh này được lưu cùng cập nhật tiến độ hoặc kết quả kiểm tra.</small></div>
-                {!paymentConfirmed && <p className="tracking-timestamp-note">Có thể lưu kết quả kiểm tra trước. Để hoàn thành phiếu, cần xác nhận thanh toán tại mục Thanh toán.</p>}
+                {!completionSubmitOpen && <div className="appointment-form-group"><label htmlFor="repair-progress-photo">Ảnh bằng chứng</label><input id="repair-progress-photo" type="file" accept="image/jpeg,image/png" onChange={(event) => setEvidencePhoto(event.target.files?.[0] || null)} /><small>Bắt buộc tải ảnh JPEG hoặc PNG, tối đa 5 MB. Ảnh này được lưu cùng cập nhật tiến độ hoặc kết quả kiểm tra.</small></div>}
+                {!paymentConfirmed && <p className="tracking-timestamp-note">Có thể lưu kết quả kiểm tra trước. Để hoàn thành phiếu, cần xác nhận thanh toán tại mục Báo giá.</p>}
             </section>
         </div>}
     </main>;

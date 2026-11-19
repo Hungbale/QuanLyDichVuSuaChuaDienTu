@@ -6,6 +6,8 @@ import type { RepairHistoryEntry } from "../../types/repairTicket";
 import type { RepairTrackingDetails, RepairTrackingPhoto } from "../../types/repairTracking";
 import { statusLabel } from "../../utils/statusLabel";
 import { repairTrackingTitle } from "../../utils/repairTrackingTitle";
+import { photosForRepairTimelineEvent } from "../../utils/repairTimelinePhotos";
+import { repairTimelineLines } from "../../utils/repairTimelineLines";
 
 const errorPayload = (error: unknown) => {
     if (!axios.isAxiosError(error)) return undefined;
@@ -98,9 +100,6 @@ function RepairHistory() {
     };
 
     const timeline = tracking?.timeline.map((event, index) => {
-        const update = tracking.updates.find((entry) =>
-            entry.createdAt === event.createdAt && entry.status === event.details,
-        );
         return {
             id: `${event.type}-${index}`,
             type: event.type,
@@ -109,7 +108,7 @@ function RepairHistory() {
             details: event.details,
             note: event.note,
             actor: event.actorName,
-            photos: update?.photos || [],
+            photos: photosForRepairTimelineEvent(event, tracking.updates),
         };
     }) || [];
 
@@ -190,8 +189,8 @@ function RepairHistory() {
                             <span className="repair-timeline-marker" aria-hidden="true" />
                             <div className="repair-timeline-content">
                                 <div className="repair-timeline-heading"><h3>{event.title}</h3><time>{formatDateTime(event.date)}</time></div>
-                                {event.details && event.type !== "STATUS_UPDATED" && <p>{event.details}</p>}
-                                {event.note && <p>{event.note}</p>}
+                                {event.details && event.type !== "STATUS_UPDATED" && repairTimelineLines(event.details).map((line, index) => <p key={`${event.id}-detail-${index}`}>{line}</p>)}
+                                {repairTimelineLines(event.note).map((line, index) => <p key={`${event.id}-note-${index}`}>{line}</p>)}
                                 {event.actor && <small>Thực hiện bởi: {event.actor}</small>}
                                 {event.photos.length > 0 && <div className="repair-timeline-photos">{event.photos.map((photo, index) => <button className="repair-timeline-photo-button" type="button" key={`${event.id}-${photo.fileName}-${index}`} onClick={() => setPreviewPhoto(photo)} aria-label={`Xem ảnh bằng chứng ${event.title}`}><img src={photo.dataUri} alt={`Bằng chứng ${event.title}`} loading="lazy" /></button>)}</div>}
                             </div>

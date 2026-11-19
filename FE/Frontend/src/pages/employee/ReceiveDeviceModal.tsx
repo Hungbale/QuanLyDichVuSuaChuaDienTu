@@ -3,7 +3,7 @@ import { getCustomersApi } from "../../api/customerApi";
 import { getMyEmployeeProfileApi } from "../../api/employeeApi";
 import { getMyAssignedAppointmentGroupsApi } from "../../api/appointmentApi";
 import { createRepairIntakeApi, getRepairIntakeApi } from "../../api/repairIntakeApi";
-import { getMyAssignedRepairTicketsApi } from "../../api/repairTicketApi";
+import { getMyAssignedRepairTicketsApi, getRepairTicketHistoryApi } from "../../api/repairTicketApi";
 import type { AssignedAppointment } from "../../types/appointment";
 import type { Customer } from "../../types/customer";
 import type { RepairIntakeRequest } from "../../types/repairIntake";
@@ -11,6 +11,7 @@ import type { RepairTicket } from "../../types/repairTicket";
 
 const messageOf = (error: any) => error.response?.data?.message || error.response?.data?.error || error.message || "Không thể xử lý tiếp nhận thiết bị.";
 const isScheduled = (status: string) => status === "SCHEDULED" || status === "Đã lên lịch";
+const intakeIssueNotePrefix = "Lỗi khách phản ánh bổ sung khi tiếp nhận:";
 
 interface EmployeeReceiveDeviceProps {
     appointmentId?: string | null;
@@ -40,6 +41,22 @@ function EmployeeReceiveDevice({ appointmentId: requestedAppointmentId, ticketId
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+
+    const loadReportedIssue = async (ticket: RepairTicket | null, appointment: AssignedAppointment | null) => {
+        const reportedIssue = appointment?.problemDescription?.trim() || "";
+        setCustomerReportedIssue(reportedIssue);
+        if (!ticket) return;
+        try {
+            const history = await getRepairTicketHistoryApi(ticket.id);
+            const intakeIssueNote = [...history].reverse().find((activity) => activity.note?.trim().startsWith(intakeIssueNotePrefix))?.note?.trim();
+            const additionalIssue = intakeIssueNote?.slice(intakeIssueNotePrefix.length).trim();
+            if (additionalIssue) {
+                setCustomerReportedIssue([reportedIssue, `Lỗi tiếp nhận bổ sung: ${additionalIssue}`].filter(Boolean).join("\n"));
+            }
+        } catch {
+            // Keep the issue reported in the appointment if ticket history is unavailable.
+        }
+    };
 
     useEffect(() => {
         Promise.all([
@@ -86,10 +103,11 @@ function EmployeeReceiveDevice({ appointmentId: requestedAppointmentId, ticketId
         setCustomerSearch(appointment.customerName ? `${appointment.customerName} · ${appointment.contactPhone}` : appointment.contactPhone);
         setDevice(appointment.device);
         setReceivedDate(appointment.appointmentDate);
-        setCustomerReportedIssue(appointment?.problemDescription || "");
-        setSelectedTicket(assignedTickets.find((ticket) => ticket.customerId === appointment.customerId
+        const ticket = assignedTickets.find((ticket) => ticket.customerId === appointment.customerId
             && ticket.device === appointment.device && ticket.receivedDate === appointment.appointmentDate
-            && isScheduled(ticket.status)) || null);
+            && isScheduled(ticket.status)) || null;
+        setSelectedTicket(ticket);
+        void loadReportedIssue(ticket, appointment);
     }, [requestedAppointmentId, assignedAppointments, assignedTickets]);
 
     useEffect(() => {
@@ -112,13 +130,13 @@ function EmployeeReceiveDevice({ appointmentId: requestedAppointmentId, ticketId
         setCustomerSearch(customer ? `${customer.customerCode} · ${customer.fullName} · ${customer.phone}` : ticket.customerName);
         setDevice(ticket.device);
         setReceivedDate(ticket.receivedDate);
-        setCustomerReportedIssue(appointment?.problemDescription || "");
+        void loadReportedIssue(ticket, appointment || null);
     }, [requestedTicketId, loading, assignedTickets, customers, assignedAppointments]);
 
     const filteredCustomers = useMemo(() => {
         const query = customerSearch.trim().toLocaleLowerCase("vi");
         const results = customers.filter((customer) => query
-            ? [customer.customerCode, customer.fullName, customer.phone, customer.email].some((value) => value?.toLocaleLowerCase("vi").includes(query))
+            ? customer.fullName.toLocaleLowerCase("vi").includes(query) || customer.phone.replace(/\s/g, "").includes(query.replace(/\s/g, ""))
             : appointmentByCustomer.has(customer.id));
         return results.sort((a, b) => Number(appointmentByCustomer.has(b.id)) - Number(appointmentByCustomer.has(a.id)) || a.fullName.localeCompare(b.fullName, "vi"));
     }, [customers, customerSearch, appointmentByCustomer]);
@@ -134,7 +152,7 @@ function EmployeeReceiveDevice({ appointmentId: requestedAppointmentId, ticketId
         if (appointment || pendingTicket) {
             setDevice(appointment?.device || pendingTicket!.device);
             setReceivedDate(appointment?.appointmentDate || pendingTicket!.receivedDate);
-            setCustomerReportedIssue(appointment?.problemDescription || "");
+            void loadReportedIssue(pendingTicket, appointment || null);
         } else {
             setCustomerReportedIssue("");
             }
@@ -244,7 +262,7 @@ function EmployeeReceiveDevice({ appointmentId: requestedAppointmentId, ticketId
                         aria-expanded={customerPickerOpen}
                         aria-controls="receive-customer-options"
                         value={customerSearch}
-                        placeholder="Tìm theo mã, tên, số điện thoại hoặc email"
+                        placeholder="Tìm theo tên hoặc số điện thoại"
                         onFocus={() => {
                             if (customerId) {
                                 setCustomerId("");
