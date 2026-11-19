@@ -42,6 +42,10 @@ public interface RepairTicketRepository extends JpaRepository<RepairTicket, Long
             """)
     List<RepairTicket> search(@Param("keyword") String keyword);
 
+    Optional<RepairTicket> findByTicketCode(String ticketCode);
+
+    Optional<RepairTicket> findByTicketCodeIgnoreCase(String ticketCode);
+
     List<RepairTicket> findByCustomer_IdOrderByReceivedDateDescIdDesc(Long customerId);
 
     long countByCustomer_Id(Long customerId);
@@ -51,4 +55,8 @@ public interface RepairTicketRepository extends JpaRepository<RepairTicket, Long
     boolean existsByAppointment_Id(Long appointmentId);
 
     Optional<RepairTicket> findByAppointment_Id(Long appointmentId);
+
+    boolean existsByTechnician_Id(Long technicianId);
+
+    boolean existsByService_Id(Long serviceId);
 }

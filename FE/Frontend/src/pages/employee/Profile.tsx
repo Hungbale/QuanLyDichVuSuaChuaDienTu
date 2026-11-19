@@ -151,7 +151,7 @@ function EmployeeProfile() {
 
         if (!emailRegex.test(emailValue)) {
             setError(
-                "Email không đúng định dạng."
+                "Địa chỉ thư điện tử không đúng định dạng."
             );
             return;
         }
@@ -329,7 +329,7 @@ function EmployeeProfile() {
                                 {/* EMAIL */}
                                 <div className="form-group">
                                     <label htmlFor="email">
-                                        Email
+                                        Địa chỉ thư điện tử
                                     </label>
 
                                     <div className="profile-input-wrapper">

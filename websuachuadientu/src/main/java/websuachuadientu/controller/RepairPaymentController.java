@@ -12,7 +12,6 @@ import websuachuadientu.dto.RepairPaymentResponse;
 import websuachuadientu.service.RepairPaymentService;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @SecurityRequirement(name = "bearerAuth")
@@ -60,13 +59,4 @@ public class RepairPaymentController {
                 .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(IllegalArgumentException exception) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
-    }
-
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<Map<String, String>> handleConflict(IllegalStateException exception) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", exception.getMessage()));
-    }
 }

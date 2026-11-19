@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { registerApi } from "../../api/authApi";
+import { translateApiError } from "../../utils/apiErrorMessage";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^0\d{9}$/;
@@ -64,29 +65,29 @@ function getRegistrationErrorMessage(error: unknown): string {
 
     if (detail) {
         return status
-            ? `Đăng ký thất bại (HTTP ${status}): ${detail}`
-            : `Đăng ký thất bại: ${detail}`;
+            ? `Đăng ký thất bại (HTTP ${status}): ${translateApiError(detail, status)}`
+            : `Đăng ký thất bại: ${translateApiError(detail)}`;
     }
     if (status === 400) {
-        return "Máy chủ từ chối thông tin đăng ký (HTTP 400). Hãy kiểm tra email, mật khẩu, họ tên, số điện thoại 10 chữ số bắt đầu bằng 0 và địa chỉ.";
+        return "Máy chủ từ chối thông tin đăng ký (HTTP 400). Hãy kiểm tra địa chỉ thư điện tử, mật khẩu, họ tên, số điện thoại 10 chữ số bắt đầu bằng 0 và địa chỉ.";
     }
     if (status === 409) {
-        return "Email hoặc số điện thoại này đã được đăng ký (HTTP 409). Hãy dùng thông tin khác.";
+        return "Địa chỉ thư điện tử hoặc số điện thoại này đã được đăng ký (HTTP 409). Hãy dùng thông tin khác.";
     }
     if (status === 404) {
-        return "Không tìm thấy API đăng ký (HTTP 404). Kiểm tra đường dẫn API và backend đang chạy.";
+        return "Không tìm thấy chức năng đăng ký (HTTP 404). Hãy kiểm tra đường dẫn dịch vụ và trạng thái hoạt động của máy chủ.";
     }
     if (status && status >= 500) {
-        return `Backend gặp lỗi khi tạo tài khoản (HTTP ${status}). Kiểm tra log backend và kết nối cơ sở dữ liệu.`;
+        return `Máy chủ gặp lỗi khi tạo tài khoản (HTTP ${status}). Vui lòng thử lại sau.`;
     }
     if (status) {
-        return `Đăng ký thất bại (HTTP ${status}). ${requestError.message || "Backend không chấp nhận yêu cầu."}`;
+        return `Đăng ký thất bại (HTTP ${status}). ${translateApiError(requestError.message, status)}`;
     }
     if (requestError.code === "ERR_NETWORK" || requestError.request) {
-        return "Không kết nối được tới backend. Kiểm tra backend có đang chạy tại VITE_API_URL và cho phép kết nối từ frontend không.";
+        return "Không thể kết nối đến máy chủ. Hãy kiểm tra địa chỉ dịch vụ và trạng thái hoạt động của máy chủ.";
     }
 
-    return `Không thể gửi yêu cầu đăng ký. ${requestError.message || "Vui lòng thử lại."}`;
+    return `Không thể gửi yêu cầu đăng ký. ${translateApiError(requestError.message)}`;
 }
 
 function Register() {
@@ -170,7 +171,7 @@ function Register() {
 
         if (!emailRegex.test(emailValue)) {
             setError(
-                "Email không đúng định dạng. Vui lòng nhập lại."
+                "Địa chỉ thư điện tử không đúng định dạng. Vui lòng nhập lại."
             );
             return;
         }
@@ -348,7 +349,7 @@ function Register() {
                         <div className="auth-form-group">
 
                             <label htmlFor="email">
-                                Email
+                                Địa chỉ thư điện tử
                             </label>
 
                             <div className="auth-input-wrapper">
@@ -572,7 +573,7 @@ function Register() {
                 </div>
 
                 <div className="auth-copyright">
-                    © 2026 FIXHUB. All rights reserved.
+                    © 2026 FIXHUB. Bảo lưu mọi quyền.
                 </div>
 
             </div>

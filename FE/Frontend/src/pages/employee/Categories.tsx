@@ -166,7 +166,8 @@ function Categories() {
             setSuccess("");
 
             await changeCategoryStatusApi(
-                category.id
+                category.id,
+                category.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"
             );
 
             setSuccess(

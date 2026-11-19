@@ -5,10 +5,10 @@ services:
     restart: unless-stopped
 
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-repair_service}
       MYSQL_USER: ${MYSQL_USER:-repair_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-repair123}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
 
     ports:
       - "3307:3306"
@@ -25,9 +25,11 @@ services:
       - "8080:8080"
 
     environment:
+      SPRING_PROFILES_ACTIVE: production
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-repair_service}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-repair_user}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-repair123}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:-ChangeThisJwtSecretKeyToSomethingLongAndSecureAtLeast32Chars}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@repair.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
 
