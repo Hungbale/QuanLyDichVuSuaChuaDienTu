@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import {
     Mail,
+    Pencil,
     Phone,
     Save,
     User,
+    X,
 } from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
@@ -31,6 +33,7 @@ function EmployeeProfile() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -100,6 +103,16 @@ function EmployeeProfile() {
         setError("");
     };
 
+    const handleCancelEdit = () => {
+        if (!employee) return;
+        setFullName(employee.fullName);
+        setEmail(employee.email ?? employee.user?.email ?? user?.email ?? "");
+        setPhone(employee.phone);
+        setIsEditing(false);
+        setError("");
+        setSuccess("");
+    };
+
     const handleSubmit = async (
         event: FormEvent<HTMLFormElement>
     ) => {
@@ -108,6 +121,7 @@ function EmployeeProfile() {
         if (!employee) {
             return;
         }
+        if (!isEditing) return;
 
         setError("");
         setSuccess("");
@@ -192,6 +206,7 @@ function EmployeeProfile() {
                     updatedEmployee.email ?? updatedEmployee.user?.email ?? "",
             });
 
+            setIsEditing(false);
             setError("");
             setSuccess(
                 "Cập nhật thông tin thành công."
@@ -210,8 +225,9 @@ function EmployeeProfile() {
 
     if (loading) {
         return (
-            <div className="profile-page">
-                <div className="page-header">
+            <div className="management-page appointment-page profile-page">
+                <header className="appointment-page-header">
+                    <span className="appointment-eyebrow">FIXHUB · NHÂN VIÊN</span>
                     <h1>
                         Thông tin cá nhân
                     </h1>
@@ -219,14 +235,15 @@ function EmployeeProfile() {
                     <p>
                         Đang tải thông tin...
                     </p>
-                </div>
+                </header>
             </div>
         );
     }
 
     return (
-        <div className="profile-page">
-            <div className="page-header">
+        <div className="management-page appointment-page profile-page">
+            <header className="appointment-page-header">
+                <span className="appointment-eyebrow">FIXHUB · NHÂN VIÊN</span>
                 <h1>
                     Thông tin cá nhân
                 </h1>
@@ -235,7 +252,7 @@ function EmployeeProfile() {
                     Xem và cập nhật thông tin
                     tài khoản nhân viên.
                 </p>
-            </div>
+            </header>
 
             <div className="profile-card">
                 {employee && (
@@ -300,6 +317,7 @@ function EmployeeProfile() {
                                             value={
                                                 fullName
                                             }
+                                            disabled={!isEditing || saving}
                                             onChange={
                                                 handleChange
                                             }
@@ -326,6 +344,7 @@ function EmployeeProfile() {
                                             value={
                                                 email
                                             }
+                                            disabled={!isEditing || saving}
                                             onChange={
                                                 handleChange
                                             }
@@ -352,6 +371,7 @@ function EmployeeProfile() {
                                             value={
                                                 phone
                                             }
+                                            disabled={!isEditing || saving}
                                             onChange={
                                                 handleChange
                                             }
@@ -363,21 +383,23 @@ function EmployeeProfile() {
                             </div>
 
                             <div className="profile-actions">
-                                <button
-                                    type="submit"
-                                    className="primary-button"
-                                    disabled={
-                                        saving
-                                    }
-                                >
-                                    <Save
-                                        size={16}
-                                    />
-
-                                    {saving
-                                        ? "Đang lưu..."
-                                        : "Lưu thay đổi"}
-                                </button>
+                                {isEditing ? <>
+                                    <button type="button" className="secondary-button" onClick={handleCancelEdit} disabled={saving}>
+                                        <X size={16} /> Hủy
+                                    </button>
+                                    <button type="submit" className="primary-button" disabled={saving}>
+                                        <Save size={16} /> {saving ? "Đang cập nhật..." : "Cập nhật"}
+                                    </button>
+                                </> : <button type="button" className="primary-button" onClick={() => {
+                                    setFullName(employee.fullName);
+                                    setEmail(employee.email ?? employee.user?.email ?? user?.email ?? "");
+                                    setPhone(employee.phone);
+                                    setError("");
+                                    setSuccess("");
+                                    setIsEditing(true);
+                                }}>
+                                    <Pencil size={16} /> Chỉnh sửa thông tin
+                                </button>}
                             </div>
                         </form>
                     </>

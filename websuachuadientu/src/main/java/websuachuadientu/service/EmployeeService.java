@@ -10,6 +10,8 @@ import websuachuadientu.entity.Employee;
 import websuachuadientu.entity.User;
 import websuachuadientu.repository.EmployeeRepository;
 import websuachuadientu.repository.UserRepository;
+import websuachuadientu.repository.AppointmentRepository;
+import websuachuadientu.repository.RepairTicketRepository;
 
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -21,6 +23,8 @@ public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
+    private final AppointmentRepository appointmentRepository;
+    private final RepairTicketRepository repairTicketRepository;
     private final PasswordEncoder passwordEncoder;
 
     public List<Employee> getAll(String keyword) {
@@ -29,18 +33,14 @@ public class EmployeeService {
             return employeeRepository.findAll();
         }
 
-        return employeeRepository
-                .findByFullNameContainingIgnoreCaseOrPhoneContaining(
-                        keyword,
-                        keyword
-                );
+        return employeeRepository.searchByKeyword(keyword.trim());
     }
 
     public Employee getById(Long id) {
 
         return employeeRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Không tìm thấy nhân viên"));
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy nhân viên"));
     }
 
     public Employee getByEmail(String email) {
@@ -86,7 +86,7 @@ public class EmployeeService {
         }
 
         if (request.getPassword() == null || request.getPassword().isBlank()) {
-            throw new RuntimeException("Mật khẩu không được để trống");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu không được để trống");
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -136,16 +136,14 @@ public class EmployeeService {
         return employeeRepository.save(employee);
     }
 
-    public Employee changeStatus(Long id) {
-
+    @Transactional
+    public Employee changeStatus(Long id, String status) {
         Employee employee = getById(id);
-
-        if ("ACTIVE".equals(employee.getStatus())) {
-            employee.setStatus("LOCKED");
-        } else {
-            employee.setStatus("ACTIVE");
+        if (!"ACTIVE".equals(status) && !"INACTIVE".equals(status) && !"LOCKED".equals(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Employee status must be ACTIVE, INACTIVE, or LOCKED");
         }
-
+        employee.setStatus(status);
         return employeeRepository.save(employee);
     }
 
@@ -154,6 +152,11 @@ public class EmployeeService {
 
         Employee employee = getById(id);
         User user = employee.getUser();
+
+        if (appointmentRepository.existsByTechnician_Id(id) || repairTicketRepository.existsByTechnician_Id(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot delete an employee assigned to an appointment or repair ticket; lock the account instead");
+        }
 
         employeeRepository.delete(employee);
         userRepository.delete(user);

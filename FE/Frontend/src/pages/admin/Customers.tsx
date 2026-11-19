@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
     changeCustomerStatusApi,
     createCustomerApi,
+    getCustomerByIdApi,
     getCustomersApi,
     updateCustomerApi,
 } from "../../api/customerApi";
@@ -12,8 +14,61 @@ import type {
     Customer,
     CustomerRequest,
 } from "../../types/customer";
+import { getRepairTicketsApi } from "../../api/repairTicketApi";
+import { getRepairQuoteApi } from "../../api/repairQuoteApi";
+import { getRepairTrackingApi } from "../../api/repairTrackingApi";
+import type { RepairTicket } from "../../types/repairTicket";
+
+const apiMessage = (error: unknown, fallback: string) => {
+    if (!error || typeof error !== "object") return fallback;
+    const response = (error as { response?: { data?: { message?: unknown } } }).response;
+    return typeof response?.data?.message === "string" ? response.data.message : fallback;
+};
+
+const formatDateOnly = (value: string | null | undefined) => {
+    if (!value) return "—";
+    const date = value.length === 10 ? new Date(`${value}T00:00:00`) : new Date(value);
+    return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("vi-VN");
+};
+
+const customerStatusLabel = (status: string | null | undefined) => {
+    switch (status?.trim().toUpperCase()) {
+        case "ACTIVE":
+            return "\u0110ang ho\u1ea1t \u0111\u1ed9ng";
+        case "LOCKED":
+            return "\u0110\u00e3 kh\u00f3a";
+        default:
+            return "Kh\u00f4ng x\u00e1c \u0111\u1ecbnh";
+    }
+};
+
+const repairStatusLabel = (status: string | null | undefined) => {
+    const normalized = status?.trim().replace(/[Đđ]/g, "D").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[ -]+/g, "_");
+    const labels: Record<string, string> = {
+        SCHEDULED: "Ch\u1edd ti\u1ebfp nh\u1eadn",
+        RECEIVED: "\u0110\u00e3 ti\u1ebfp nh\u1eadn",
+        DIAGNOSING: "\u0110ang ki\u1ec3m tra",
+        DANG_KIEM_TRA: "\u0110ang ki\u1ec3m tra",
+        WAITING_FOR_QUOTE_APPROVAL: "Ch\u1edd x\u00e1c nh\u1eadn b\u00e1o gi\u00e1",
+        CHO_XAC_NHAN_BAO_GIA: "Ch\u1edd x\u00e1c nh\u1eadn b\u00e1o gi\u00e1",
+        REPAIRING: "\u0110ang s\u1eeda ch\u1eefa",
+        DANG_SUA: "\u0110ang s\u1eeda ch\u1eefa",
+        IN_PROGRESS: "\u0110ang s\u1eeda ch\u1eefa",
+        WAITING_FOR_PARTS: "Ch\u1edd linh ki\u1ec7n",
+        CHO_LINH_KIEN: "Ch\u1edd linh ki\u1ec7n",
+        CANNOT_BE_REPAIRED: "Kh\u00f4ng th\u1ec3 s\u1eeda",
+        KHONG_THE_SUA: "Kh\u00f4ng th\u1ec3 s\u1eeda",
+        CUSTOMER_DECLINED: "Kh\u00e1ch h\u00e0ng t\u1eeb ch\u1ed1i",
+        KHACH_TU_CHOI: "Kh\u00e1ch h\u00e0ng t\u1eeb ch\u1ed1i",
+        COMPLETED: "Ho\u00e0n th\u00e0nh",
+        HOAN_THANH: "Ho\u00e0n th\u00e0nh",
+        CANCELLED: "\u0110\u00e3 h\u1ee7y",
+    };
+    return normalized ? labels[normalized] ?? status ?? "Kh\u00f4ng x\u00e1c \u0111\u1ecbnh" : "Kh\u00f4ng x\u00e1c \u0111\u1ecbnh";
+};
 
 function AdminCustomers() {
+    const navigate = useNavigate();
     const [customers, setCustomers] = useState<Customer[]>([]);
 
     const [keyword, setKeyword] = useState("");
@@ -28,6 +83,60 @@ function AdminCustomers() {
     const [showModal, setShowModal] = useState(false);
     const [editingCustomer, setEditingCustomer] =
         useState<Customer | null>(null);
+    const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [customerTickets, setCustomerTickets] = useState<RepairTicket[]>([]);
+    const [ticketTotals, setTicketTotals] = useState<Record<number, number | null>>({});
+    const [ticketCompletedDates, setTicketCompletedDates] = useState<Record<number, string | null>>({});
+    const [ticketTotalsIncomplete, setTicketTotalsIncomplete] = useState(false);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState("");
+
+    const viewCustomer = async (customer: Customer) => {
+        setDetailLoading(true);
+        setError("");
+        setCustomerTickets([]);
+        setTicketTotals({});
+        setTicketCompletedDates({});
+        setTicketTotalsIncomplete(false);
+        setHistoryError("");
+        try {
+            const detail = await getCustomerByIdApi(customer.id);
+            setViewingCustomer(detail);
+            setHistoryLoading(true);
+            try {
+                const tickets = await getRepairTicketsApi(detail.customerCode);
+                const customerRepairTickets = tickets.filter((ticket) => ticket.customerId === detail.id);
+                setCustomerTickets(customerRepairTickets);
+                const ticketFinancials = await Promise.all(customerRepairTickets.map(async (ticket) => {
+                    const [quoteTotal, completedDate] = await Promise.all([
+                        getRepairQuoteApi(ticket.id)
+                            .then((quote) => quote.totalAmount)
+                            .catch((quoteError: any) => quoteError.response?.status === 404 ? 0 : null),
+                        repairStatusLabel(ticket.status) === "Ho\u00e0n th\u00e0nh"
+                            ? getRepairTrackingApi(ticket.id)
+                                .then((tracking) => tracking.timeline.find((event) => event.type === "REPAIR_COMPLETED")?.createdAt || ticket.completedDate || null)
+                                .catch(() => ticket.completedDate || null)
+                            : Promise.resolve(ticket.completedDate || null),
+                    ]);
+                    return [ticket.id, quoteTotal, completedDate] as const;
+                }));
+                const totals = Object.fromEntries(ticketFinancials.map(([ticketId, total]) => [ticketId, total])) as Record<number, number | null>;
+                const completedDates = Object.fromEntries(ticketFinancials.map(([ticketId, , completedDate]) => [ticketId, completedDate])) as Record<number, string | null>;
+                setTicketTotals(totals);
+                setTicketCompletedDates(completedDates);
+                setTicketTotalsIncomplete(ticketFinancials.some(([, total]) => total === null));
+            } catch (historyRequestError: unknown) {
+                setHistoryError(apiMessage(historyRequestError, "Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c l\u1ecbch s\u1eed s\u1eeda ch\u1eefa."));
+            } finally {
+                setHistoryLoading(false);
+            }
+        } catch (requestError: unknown) {
+            setError(apiMessage(requestError, "Kh\u00f4ng th\u1ec3 t\u1ea3i chi ti\u1ebft kh\u00e1ch h\u00e0ng."));
+        } finally {
+            setDetailLoading(false);
+        }
+    };
 
     const [form, setForm] = useState<CustomerRequest>({
         customerCode: "",
@@ -47,10 +156,7 @@ function AdminCustomers() {
             setLoading(true);
             setError("");
 
-            const data = await getCustomersApi({
-                keyword: keyword.trim() || undefined,
-                status: statusFilter || undefined,
-            });
+            const data = await getCustomersApi({ status: statusFilter || undefined });
 
             setCustomers(data);
         } catch (error: any) {
@@ -68,6 +174,14 @@ function AdminCustomers() {
     useEffect(() => {
         loadCustomers();
     }, []);
+
+    const visibleCustomers = useMemo(() => {
+        const normalizedKeyword = keyword.trim().toLocaleLowerCase("vi-VN");
+        return customers.filter((customer) => !normalizedKeyword || [
+            customer.customerCode, customer.fullName, customer.email,
+            customer.user?.email, customer.phone,
+        ].some((value) => value?.toLocaleLowerCase("vi-VN").includes(normalizedKeyword)));
+    }, [customers, keyword]);
 
     // =========================
     // FORM
@@ -158,12 +272,12 @@ function AdminCustomers() {
         }
 
         if (!form.email.trim()) {
-            setError("Email không được để trống.");
+            setError("Địa chỉ thư điện tử không được để trống.");
             return;
         }
 
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-            setError("Email không hợp lệ.");
+            setError("Địa chỉ thư điện tử không hợp lệ.");
             return;
         }
 
@@ -265,9 +379,7 @@ function AdminCustomers() {
             setError("");
             setSuccess("");
 
-            await changeCustomerStatusApi(
-                customer.id
-            );
+            await changeCustomerStatusApi(customer.id, customer.status === "ACTIVE" ? "LOCKED" : "ACTIVE");
 
             setSuccess(
                 "Thay đổi trạng thái khách hàng thành công."
@@ -404,7 +516,7 @@ function AdminCustomers() {
                     <div className="table-state">
                         Đang tải danh sách khách hàng...
                     </div>
-                ) : customers.length === 0 ? (
+                ) : visibleCustomers.length === 0 ? (
                     <div className="table-state">
                         Không có khách hàng nào.
                     </div>
@@ -415,7 +527,7 @@ function AdminCustomers() {
                                 <th>ID</th>
                                 <th>Mã KH</th>
                                 <th>Họ tên</th>
-                                <th>Email</th>
+                                <th>Địa chỉ thư điện tử</th>
                                 <th>Số điện thoại</th>
                                 <th>Địa chỉ</th>
                                 <th>Số lần sửa</th>
@@ -425,7 +537,7 @@ function AdminCustomers() {
                         </thead>
 
                         <tbody>
-                            {customers.map(
+                            {visibleCustomers.map(
                                 (customer) => (
                                     <tr
                                         key={
@@ -490,6 +602,7 @@ function AdminCustomers() {
 
                                         <td>
                                             <div className="action-buttons">
+                                                <button className="secondary-button" type="button" onClick={() => void viewCustomer(customer)}>Chi tiết</button>
                                                 <button
                                                     className="secondary-button"
                                                     onClick={() =>
@@ -640,7 +753,7 @@ function AdminCustomers() {
                                 }}
                             >
                                 <label>
-                                    Email
+                                    Địa chỉ thư điện tử
                                 </label>
 
                                 <input
@@ -793,6 +906,30 @@ function AdminCustomers() {
                     </div>
                 </div>
             )}
+            {detailLoading && <div className="modal-overlay"><div className="modal customer-modal">Đang tải hồ sơ khách hàng...</div></div>}
+            {viewingCustomer && <div className="modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingCustomer(null); }}>
+                <section className="modal customer-modal customer-detail-modal" role="dialog" aria-modal="true" aria-labelledby="customer-detail-title">
+                    <div className="modal-header"><div><h2 id="customer-detail-title">H&#7891; s&#417; kh&#225;ch h&#224;ng</h2><p>{viewingCustomer.customerCode}</p></div><button className="modal-close" type="button" aria-label="&#272;&#243;ng" onClick={() => setViewingCustomer(null)}>&#215;</button></div>
+                    <div className="appointment-details-grid">
+                        <div><span>H&#7885; t&#234;n</span><strong>{viewingCustomer.fullName}</strong></div>
+                        <div><span>Email</span><strong>{viewingCustomer.email || viewingCustomer.user?.email || "&#8212;"}</strong></div>
+                        <div><span>S&#7889; &#273;i&#7879;n tho&#7841;i</span><strong>{viewingCustomer.phone}</strong></div>
+                                <div><span>Tr&#7841;ng th&#225;i</span><strong>{customerStatusLabel(viewingCustomer.status)}</strong></div>
+                        <div><span>S&#7889; l&#7847;n s&#7917;a ch&#7919;a</span><strong>{viewingCustomer.repairCount}</strong></div>
+                        <div className="appointment-detail-full"><span>&#272;&#7883;a ch&#7881;</span><strong>{viewingCustomer.address || "&#8212;"}</strong></div>
+                    </div>
+                    <section className="customer-repair-history">
+                        <h3>L&#7883;ch s&#7917; s&#7917;a ch&#7919;a</h3>
+                        {historyLoading ? <div className="table-state">&#272;ang t&#7843;i l&#7883;ch s&#7917; s&#7917;a ch&#7919;a...</div>
+                            : historyError ? <div className="error-message" role="alert">{historyError}</div>
+                            : customerTickets.length === 0 ? <div className="table-state">Kh&#225;ch h&#224;ng ch&#432;a c&#243; phi&#7871;u s&#7917;a ch&#7919;a.</div>
+                            : <div className="appointment-table-container"><table className="appointment-table customer-repair-history-table"><thead><tr><th>M&#227; phi&#7871;u</th><th>Thi&#7871;t b&#7883;</th><th>D&#7883;ch v&#7909; &#273;&#227; s&#7917; d&#7909;ng</th><th>Ng&#224;y ti&#7871;p nh&#7853;n</th><th>Ng&#224;y k&#7871;t th&#250;c</th><th>Tr&#7841;ng th&#225;i</th><th>T&#7893;ng ti&#7873;n</th><th>Thao t&#225;c</th></tr></thead>
+                                <tbody>{customerTickets.slice().sort((a, b) => b.receivedDate.localeCompare(a.receivedDate)).map((ticket) => <tr key={ticket.id}><td>{ticket.ticketCode}</td><td>{ticket.device}</td><td>{ticket.serviceName || "Ch\u01b0a ghi nh\u1eadn"}</td><td>{formatDateOnly(ticket.receivedDate)}</td><td>{formatDateOnly(ticketCompletedDates[ticket.id])}</td><td>{repairStatusLabel(ticket.status)}</td><td>{ticketTotals[ticket.id] === null ? "Ch\u01b0a t\u1ea3i \u0111\u01b0\u1ee3c" : ticketTotals[ticket.id] ? `${new Intl.NumberFormat("vi-VN").format(ticketTotals[ticket.id]!)} \u0111` : "Ch\u01b0a c\u00f3 b\u00e1o gi\u00e1"}</td><td><button className="secondary-button" type="button" onClick={() => { setViewingCustomer(null); navigate("/admin/repairs", { state: { openTicketId: ticket.id } }); }}>Chi ti&#7871;t</button></td></tr>)}</tbody>
+                                <tfoot><tr className="customer-repair-total-row"><td colSpan={6}>T&#7893;ng c&#7897;ng{ticketTotalsIncomplete ? ` (${"m\u1ed9t s\u1ed1 phi\u1ebfu ch\u01b0a t\u1ea3i \u0111\u01b0\u1ee3c"})` : ""}</td><td>{new Intl.NumberFormat("vi-VN").format(Object.values(ticketTotals).reduce<number>((sum, amount) => sum + (typeof amount === "number" ? amount : 0), 0))} &#273;</td><td></td></tr></tfoot></table></div>}
+                    </section>
+                    <div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => setViewingCustomer(null)}>&#272;&#243;ng</button></div>
+                </section>
+            </div>}
         </div>
     );
 }

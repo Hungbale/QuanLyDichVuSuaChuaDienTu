@@ -4,30 +4,16 @@ import {
     CheckCheck,
     ClipboardList,
     MonitorCog,
-    Stethoscope,
-    UserRoundPlus,
     Wrench,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const employeeSections = [
     {
-        title: "Tiếp nhận thiết bị",
-        description: "Ghi nhận thiết bị và yêu cầu ban đầu.",
-        path: "/employee/receive-device",
-        icon: UserRoundPlus,
-    },
-    {
         title: "Phiếu sửa chữa",
         description: "Xem danh sách phiếu sửa chữa.",
         path: "/employee/repairs",
         icon: ClipboardList,
-    },
-    {
-        title: "Chẩn đoán thiết bị",
-        description: "Ghi nhận tình trạng và đề xuất xử lý.",
-        path: "/employee/diagnosis",
-        icon: Stethoscope,
     },
     {
         title: "Báo giá",
@@ -36,8 +22,8 @@ const employeeSections = [
         icon: ClipboardList,
     },
     {
-        title: "Lịch hẹn",
-        description: "Xem và xử lý lịch hẹn tiếp nhận.",
+        title: "L\u1ecbch h\u1eb9n v\u00e0 ti\u1ebfp nh\u1eadn",
+        description: "Xem l\u1ecbch h\u1eb9n v\u00e0 ti\u1ebfp nh\u1eadn thi\u1ebft b\u1ecb theo l\u1ecbch \u0111\u01b0\u1ee3c giao.",
         path: "/employee/appointments",
         icon: CalendarDays,
     },

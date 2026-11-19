@@ -2,9 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getMyEmployeeProfileApi } from "../../api/employeeApi";
 import { createRepairQuoteApi } from "../../api/repairQuoteApi";
-import { getRepairTicketsApi, updateRepairTicketApi } from "../../api/repairTicketApi";
+import { getRepairTicketsApi } from "../../api/repairTicketApi";
 import { getServicesApi } from "../../api/serviceApi";
+import { confirmRepairPaymentApi, getRepairPaymentsApi } from "../../api/repairPaymentApi";
+import { statusLabel } from "../../utils/statusLabel";
+import { isQuoteReadyForEmployee } from "../../utils/employeeQuoteStatus";
 import type { RepairQuoteItemRequest } from "../../types/repairQuote";
+import type { RepairPayment } from "../../types/repairPayment";
 import type { RepairTicket } from "../../types/repairTicket";
 import type { ServiceItem } from "../../types/service";
 
@@ -12,22 +16,37 @@ type DraftItem = { serviceId: string; quantity: string };
 const emptyItem = (): DraftItem => ({ serviceId: "", quantity: "1" });
 const money = (amount: number) => `${new Intl.NumberFormat("vi-VN").format(amount)} ₫`;
 const messageOf = (error: any) => error.response?.data?.message || error.response?.data?.error || "Không thể xử lý báo giá.";
-const quoteReady = (status: string) => ["Đã kiểm tra", "Chờ báo giá", "Đã báo giá"].includes(status);
+// Saving a diagnosis makes the backend set the ticket status to DIAGNOSING
+// (displayed as "Đang kiểm tra"). That is the state from which a quote can be created.
+const quoteReady = isQuoteReadyForEmployee;
 const quoteWaiting = (status: string) => ["Chờ xác nhận báo giá", "Chờ khách xác nhận"].includes(status);
 
 function EmployeeQuotes() {
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedTicketId = Number(searchParams.get("ticketId"));
     const [tickets, setTickets] = useState<RepairTicket[]>([]);
+    const [paymentsByTicket, setPaymentsByTicket] = useState<Record<number, RepairPayment[]>>({});
     const [services, setServices] = useState<ServiceItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<RepairTicket | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
     const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
     const [saving, setSaving] = useState(false);
-    const [endingId, setEndingId] = useState<number | null>(null);
+    const [confirmingPaymentId, setConfirmingPaymentId] = useState<number | null>(null);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+    const [activeTab, setActiveTab] = useState<"current" | "past">("current");
+    const [statusFilter, setStatusFilter] = useState("ALL");
 
+    const isPastTicket = (ticket: RepairTicket) => ["COMPLETED", "Hoàn thành", "Đã kết thúc", "CANCELLED", "Đã hủy", "CUSTOMER_DECLINED", "Khách từ chối", "Khách đã từ chối"].includes(ticket.status);
+    const currentTickets = tickets.filter((ticket) => !isPastTicket(ticket));
+    const pastTickets = tickets.filter(isPastTicket);
+    const periodTickets = activeTab === "current" ? currentTickets : pastTickets;
+    const filteredTickets = periodTickets.filter((ticket) => statusFilter === "ALL" || ticket.status === statusFilter).filter((ticket) =>
+        [ticket.ticketCode, ticket.customerName, ticket.device]
+            .some((value) => value?.toLocaleLowerCase("vi").includes(searchTerm.trim().toLocaleLowerCase("vi"))),
+    );
+    const statusOptions = [...new Set(periodTickets.map((ticket) => ticket.status))];
     const load = useCallback(async () => {
         setLoading(true);
         setError("");
@@ -37,7 +56,18 @@ function EmployeeQuotes() {
                 getRepairTicketsApi(),
                 getServicesApi({ status: "ACTIVE" }),
             ]);
-            setTickets(ticketList.filter((ticket) => ticket.technicianId === profile.id));
+            const assignedTickets = ticketList.filter((ticket) => ticket.technicianId === profile.id)
+                .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate) || b.id - a.id);
+            const paymentEntries = await Promise.all(assignedTickets.map(async (ticket) => {
+                try {
+                    return [ticket.id, await getRepairPaymentsApi(ticket.id)] as const;
+                } catch (e: any) {
+                    if (e.response?.status === 404) return [ticket.id, []] as const;
+                    throw e;
+                }
+            }));
+            setTickets(assignedTickets);
+            setPaymentsByTicket(Object.fromEntries(paymentEntries));
             setServices(serviceList);
         } catch (e: any) {
             setError(messageOf(e));
@@ -45,6 +75,21 @@ function EmployeeQuotes() {
             setLoading(false);
         }
     }, []);
+
+    const confirmPayment = async (payment: RepairPayment) => {
+        setConfirmingPaymentId(payment.id);
+        setError("");
+        setNotice("");
+        try {
+            await confirmRepairPaymentApi(payment.id);
+            setNotice(`Đã xác nhận thanh toán cho phiếu ${payment.ticketCode}.`);
+            await load();
+        } catch (e: any) {
+            setError(messageOf(e));
+        } finally {
+            setConfirmingPaymentId(null);
+        }
+    };
 
     useEffect(() => { void load(); }, [load]);
 
@@ -91,27 +136,6 @@ function EmployeeQuotes() {
         }
     };
 
-    const finishRejectedTicket = async (ticket: RepairTicket) => {
-        setEndingId(ticket.id);
-        setError("");
-        setNotice("");
-        try {
-            await updateRepairTicketApi(ticket.id, {
-                customerId: ticket.customerId,
-                device: ticket.device,
-                receivedDate: ticket.receivedDate,
-                status: "Đã kết thúc",
-                technicianId: ticket.technicianId,
-            });
-            setNotice(`Đã kết thúc phiếu ${ticket.ticketCode}.`);
-            await load();
-        } catch (e: any) {
-            setError(messageOf(e));
-        } finally {
-            setEndingId(null);
-        }
-    };
-
     const closeEditor = () => {
         setSelected(null);
         if (searchParams.has("ticketId")) setSearchParams({}, { replace: true });
@@ -121,42 +145,59 @@ function EmployeeQuotes() {
         <main className="management-page appointment-page">
             <header className="appointment-page-header">
                 <span className="appointment-eyebrow">FIXHUB · NHÂN VIÊN</span>
-                <h1>Tạo và gửi báo giá</h1>
+                <h1>Quản lý báo giá</h1>
                 <p>Lập các hạng mục sửa chữa và gửi tổng chi phí cho khách hàng xác nhận.</p>
             </header>
             {error && <div className="error-message" role="alert">{error}</div>}
             {notice && <div className="success-message" role="status">{notice}</div>}
 
-            <div className="appointment-results-heading"><div><h2>Phiếu được phân công cho tôi</h2><p>{loading ? "Đang tải..." : `${tickets.length} phiếu`}</p></div></div>
+            <form className="appointment-search-panel" onSubmit={(event) => event.preventDefault()}>
+                <div className="appointment-form-group"><label htmlFor="quote-search">Tìm báo giá</label><input id="quote-search" type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Mã phiếu, khách hàng hoặc thiết bị" /></div>
+                <div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => setSearchTerm("")} disabled={!searchTerm}>Xóa tìm kiếm</button></div>
+            </form>
+
+            <div className="appointment-tabs" role="tablist" aria-label="Phân loại phiếu báo giá"><button className={activeTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "current"} onClick={() => { setActiveTab("current"); setStatusFilter("ALL"); }}>Hiện tại <span>{currentTickets.length}</span></button><button className={activeTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={activeTab === "past"} onClick={() => { setActiveTab("past"); setStatusFilter("ALL"); }}>Đã qua <span>{pastTickets.length}</span></button></div>
+            <div className="appointment-filter-row"><label htmlFor="employee-quote-status">Lọc trạng thái</label><select id="employee-quote-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{statusOptions.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></div>
+
+            <div className="appointment-results-heading"><div><h2>Phiếu {activeTab === "current" ? "hiện tại" : "đã qua"}</h2><p>{loading ? "Đang tải..." : `${filteredTickets.length} phiếu`}</p></div></div>
             {loading ? <div className="appointment-panel table-state">Đang tải phiếu sửa chữa...</div> : tickets.length === 0 ? (
                 <div className="appointment-panel appointment-empty-state"><h2>Chưa có phiếu được phân công cho bạn</h2></div>
+            ) : filteredTickets.length === 0 ? (
+                <div className="appointment-panel appointment-empty-state"><h2>Không tìm thấy báo giá phù hợp</h2><p>Thử tìm bằng mã phiếu, tên khách hàng, thiết bị hoặc trạng thái khác.</p></div>
             ) : (
                 <div className="appointment-panel appointment-table-container">
                     <table className="appointment-table repair-ticket-table">
-                        <thead><tr><th>Mã phiếu</th><th>Khách hàng</th><th>Thiết bị</th><th>Ngày nhận</th><th>Trạng thái</th><th>Báo giá</th></tr></thead>
-                        <tbody>{tickets.map((ticket) => (
+                        <thead><tr><th>Mã phiếu</th><th>Khách hàng</th><th>Thiết bị</th><th>Ngày nhận</th><th>Trạng thái</th><th>Báo giá</th><th>Thanh toán</th></tr></thead>
+                        <tbody>{filteredTickets.map((ticket) => (
                             <tr key={ticket.id}>
                                 <td><strong>{ticket.ticketCode}</strong></td>
                                 <td>{ticket.customerName}</td>
                                 <td>{ticket.device}</td>
                                 <td>{new Date(`${ticket.receivedDate}T00:00:00`).toLocaleDateString("vi-VN")}</td>
-                                <td><span className="appointment-status">{ticket.status === "Đã kết thúc" ? "Đã kết thúc" : ticket.status === "Khách từ chối" || ticket.status === "Khách đã từ chối" ? "Khách đã từ chối" : quoteWaiting(ticket.status) ? "Chờ khách xác nhận" : ticket.status}</span></td>
+                                <td><span className="appointment-status">{ticket.status === "Đã kết thúc" ? "Đã kết thúc" : ticket.status === "Khách từ chối" || ticket.status === "Khách đã từ chối" ? "Khách đã từ chối" : quoteWaiting(ticket.status) ? "Chờ khách xác nhận" : statusLabel(ticket.status)}</span></td>
                                 <td>
                                     {quoteReady(ticket.status) ? <button className="primary-button" type="button" onClick={() => { setSelected(ticket); setItems([emptyItem()]); setError(""); }}>Lập báo giá</button>
                                         : quoteWaiting(ticket.status) ? <span>Đã gửi · chờ khách xác nhận</span>
-                                            : ticket.status === "Khách từ chối" || ticket.status === "Khách đã từ chối" ? <div className="repair-ticket-actions"><button className="primary-button" type="button" disabled={endingId === ticket.id} onClick={() => void finishRejectedTicket(ticket)}>{endingId === ticket.id ? "Đang kết thúc..." : "Kết thúc"}</button></div>
+                                            : ticket.status === "Khách từ chối" || ticket.status === "Khách đã từ chối" ? <div className="repair-ticket-actions"><button className="primary-button" type="button" disabled title="Máy chủ hiện chưa hỗ trợ thao tác kết thúc phiếu khách từ chối báo giá.">Chờ bổ sung chức năng kết thúc phiếu</button></div>
                                                 : ticket.status === "Đã kết thúc" ? <span>Đã kết thúc</span>
                                                     : ticket.status === "Đang sửa" ? <span>Khách đã xác nhận</span>
                                                         : <span>Chờ kiểm tra</span>}
                                 </td>
+                                <td>{(() => {
+                                    const payments = paymentsByTicket[ticket.id] || [];
+                                    const payment = payments[0];
+                                    if (!payment) return <span>Chưa có yêu cầu</span>;
+                                    if (payment.status === "PAID") return <span className="appointment-status completed">Đã thanh toán</span>;
+                                    return <button className="secondary-button" type="button" disabled={confirmingPaymentId === payment.id} onClick={() => void confirmPayment(payment)}>{confirmingPaymentId === payment.id ? "Đang xác nhận..." : "Đã nhận tiền · Xác nhận"}</button>;
+                                })()}</td>
                             </tr>
                         ))}</tbody>
                     </table>
                 </div>
             )}
 
-            {selected && <form className="appointment-panel ticket-editor quote-editor" onSubmit={submit}>
-                <div className="appointment-card-top"><div><span className="appointment-card-reference">{selected.ticketCode}</span><h2>Báo giá cho {selected.customerName}</h2><p>{selected.device}</p></div><button className="secondary-button" type="button" onClick={closeEditor}>Đóng</button></div>
+            {selected && <div className="repair-detail-backdrop" role="presentation" onClick={closeEditor}><form className="appointment-panel ticket-editor quote-editor repair-detail-dialog" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="quote-editor-title" onClick={(event) => event.stopPropagation()}>
+                <div className="appointment-card-top"><div><span className="appointment-card-reference">{selected.ticketCode}</span><h2 id="quote-editor-title">Báo giá cho {selected.customerName}</h2><p>{selected.device}</p></div><button className="secondary-button" type="button" onClick={closeEditor}>Đóng</button></div>
                 <div className="quote-line-items">{items.map((item, index) => {
                     const selectedService = services.find((service) => service.id === Number(item.serviceId));
                     return <div className="quote-line-item" key={index}>
@@ -169,7 +210,7 @@ function EmployeeQuotes() {
                 <button className="secondary-button" type="button" onClick={() => setItems([...items, emptyItem()])}>+ Thêm hạng mục</button>
                 <div className="quote-total"><span>Tổng báo giá</span><strong>{money(items.reduce((sum, item) => sum + Number(item.quantity || 0) * (services.find((service) => service.id === Number(item.serviceId))?.price ?? 0), 0))}</strong></div>
                 <div className="appointment-search-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? "Đang gửi..." : "Gửi báo giá cho khách"}</button></div>
-            </form>}
+            </form></div>}
         </main>
     );
 }

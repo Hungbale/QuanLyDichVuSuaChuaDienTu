@@ -7,8 +7,29 @@ import websuachuadientu.entity.RepairTicket;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDate;
 
 public interface RepairTicketRepository extends JpaRepository<RepairTicket, Long> {
+    long countByReceivedDateBetween(LocalDate fromDate, LocalDate toDate);
+
+    @Query("""
+            select count(t) from RepairTicket t
+            where t.completedDate between :fromDate and :toDate
+              and upper(t.status) = upper(:status)
+            """)
+    long countCompletedBetween(@Param("fromDate") LocalDate fromDate,
+                               @Param("toDate") LocalDate toDate,
+                               @Param("status") String status);
+
+    @Query("""
+            select upper(t.status) as status, count(t) as total
+            from RepairTicket t
+            where t.receivedDate between :fromDate and :toDate
+            group by upper(t.status)
+            """)
+    List<ReportStatusCount> countStatusesReceivedBetween(@Param("fromDate") LocalDate fromDate,
+                                                          @Param("toDate") LocalDate toDate);
+
     @Query("""
             SELECT t FROM RepairTicket t
             JOIN t.customer c
@@ -22,6 +43,8 @@ public interface RepairTicketRepository extends JpaRepository<RepairTicket, Long
     List<RepairTicket> search(@Param("keyword") String keyword);
 
     List<RepairTicket> findByCustomer_IdOrderByReceivedDateDescIdDesc(Long customerId);
+
+    long countByCustomer_Id(Long customerId);
 
     long countByTechnician_IdAndStatusNotIn(Long technicianId, List<String> terminalStatuses);
 

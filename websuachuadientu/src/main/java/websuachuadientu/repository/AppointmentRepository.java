@@ -9,6 +9,17 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
+    long countByAppointmentDateBetween(LocalDate fromDate, LocalDate toDate);
+
+    @Query("""
+            select upper(a.status) as status, count(a) as total
+            from Appointment a
+            where a.appointmentDate between :fromDate and :toDate
+            group by upper(a.status)
+            """)
+    List<ReportStatusCount> countStatusesBetween(@Param("fromDate") LocalDate fromDate,
+                                                 @Param("toDate") LocalDate toDate);
+
     List<Appointment> findAllByOrderByAppointmentDateAscAppointmentTimeAsc();
 
     List<Appointment> findByContactPhoneOrderByAppointmentDateAscAppointmentTimeAsc(String contactPhone);

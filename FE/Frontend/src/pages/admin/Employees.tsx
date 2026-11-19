@@ -1,12 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
     changeEmployeeStatusApi,
     createEmployeeApi,
     deleteEmployeeApi,
+    getEmployeeByIdApi,
     getEmployeesApi,
     updateEmployeeApi,
 } from "../../api/employeeApi";
+import { getRepairTicketsApi } from "../../api/repairTicketApi";
+import type { RepairTicket } from "../../types/repairTicket";
+import { statusLabel } from "../../utils/statusLabel";
 
 import type {
     Employee,
@@ -14,6 +19,7 @@ import type {
 } from "../../types/employee";
 
 function AdminEmployees() {
+    const navigate = useNavigate();
     const [employees, setEmployees] = useState<Employee[]>([]);
 
     const [keyword, setKeyword] = useState("");
@@ -28,6 +34,41 @@ function AdminEmployees() {
     const [showModal, setShowModal] = useState(false);
     const [editingEmployee, setEditingEmployee] =
         useState<Employee | null>(null);
+    const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [employeeTasks, setEmployeeTasks] = useState<RepairTicket[]>([]);
+    const [tasksLoading, setTasksLoading] = useState(false);
+    const [tasksError, setTasksError] = useState("");
+    const [employeeTaskTab, setEmployeeTaskTab] = useState<"current" | "past">("current");
+
+    const viewEmployee = async (employee: Employee) => {
+        setDetailLoading(true);
+        setTasksLoading(true);
+        setEmployeeTasks([]);
+        setEmployeeTaskTab("current");
+        setTasksError("");
+        setError("");
+        try {
+            const [profileResult, tasksResult] = await Promise.allSettled([
+                getEmployeeByIdApi(employee.id),
+                getRepairTicketsApi(),
+            ]);
+            if (profileResult.status === "rejected") throw profileResult.reason;
+            setViewingEmployee(profileResult.value);
+            if (tasksResult.status === "fulfilled") {
+                setEmployeeTasks(tasksResult.value
+                    .filter((ticket) => ticket.technicianId === employee.id)
+                    .sort((a, b) => b.id - a.id));
+            } else {
+                setTasksError("Không thể tải danh sách công việc đang thực hiện.");
+            }
+        } catch (error: any) {
+            setError(error.response?.data?.message || "Không thể tải chi tiết nhân viên.");
+        } finally {
+            setDetailLoading(false);
+            setTasksLoading(false);
+        }
+    };
 
     const [form, setForm] = useState<EmployeeRequest>({
         employeeCode: "",
@@ -46,10 +87,9 @@ function AdminEmployees() {
             setLoading(true);
             setError("");
 
-            const data = await getEmployeesApi({
-                keyword: keyword.trim() || undefined,
-                status: statusFilter || undefined,
-            });
+            // Backend currently supports searching by name and phone only.
+            // Filter the loaded list locally to support code, email and status too.
+            const data = await getEmployeesApi();
 
             setEmployees(data);
         } catch (error: any) {
@@ -67,6 +107,20 @@ function AdminEmployees() {
     useEffect(() => {
         loadEmployees();
     }, []);
+
+    const visibleEmployees = useMemo(() => {
+        const normalizedKeyword = keyword.trim().toLocaleLowerCase("vi-VN");
+        return employees.filter((employee) => {
+            const matchesKeyword = !normalizedKeyword || [
+                employee.employeeCode,
+                employee.fullName,
+                employee.email,
+                employee.user?.email,
+                employee.phone,
+            ].some((value) => value?.toLocaleLowerCase("vi-VN").includes(normalizedKeyword));
+            return matchesKeyword && (!statusFilter || employee.status === statusFilter);
+        });
+    }, [employees, keyword, statusFilter]);
 
     // =========================
     // FORM
@@ -165,7 +219,7 @@ function AdminEmployees() {
         }
 
         if (!form.email.trim()) {
-            setError("Email không được để trống.");
+            setError("Địa chỉ thư điện tử không được để trống.");
             return;
         }
 
@@ -255,7 +309,7 @@ function AdminEmployees() {
             setError("");
             setSuccess("");
 
-            await changeEmployeeStatusApi(employee.id);
+            await changeEmployeeStatusApi(employee.id, employee.status === "ACTIVE" ? "LOCKED" : "ACTIVE");
 
             setSuccess(
                 `${
@@ -418,14 +472,14 @@ function AdminEmployees() {
                         <h2>Danh sách nhân viên</h2>
                         <p>Theo dõi hồ sơ, trạng thái và thao tác quản lý.</p>
                     </div>
-                    <span>{employees.length} nhân viên</span>
+                    <span>{visibleEmployees.length} / {employees.length} nhân viên</span>
                 </div>
                 <div className="table-container">
                 {loading ? (
                     <div className="table-state">
                         Đang tải danh sách nhân viên...
                     </div>
-                ) : employees.length === 0 ? (
+                ) : visibleEmployees.length === 0 ? (
                     <div className="table-state">
                         Không có nhân viên nào.
                     </div>
@@ -436,7 +490,7 @@ function AdminEmployees() {
                                 <th>ID</th>
                                 <th>Mã nhân viên</th>
                                 <th>Họ tên</th>
-                                <th>Email</th>
+                                <th>Địa chỉ thư điện tử</th>
                                 <th>Số điện thoại</th>
                                 <th>Trạng thái</th>
                                 <th>Thao tác</th>
@@ -444,7 +498,7 @@ function AdminEmployees() {
                         </thead>
 
                         <tbody>
-                            {employees.map((employee) => (
+                            {visibleEmployees.map((employee) => (
                                 <tr key={employee.id}>
                                     <td>
                                         {employee.id}
@@ -484,6 +538,7 @@ function AdminEmployees() {
 
                                     <td>
                                         <div className="action-buttons">
+                                            <button className="secondary-button" type="button" onClick={() => void viewEmployee(employee)}>Chi tiết</button>
                                             <button
                                                 className="secondary-button"
                                                 onClick={() =>
@@ -627,7 +682,7 @@ function AdminEmployees() {
                                 }}
                             >
                                 <label>
-                                    Email
+                                    Địa chỉ thư điện tử
                                 </label>
 
                                 <input
@@ -729,6 +784,34 @@ function AdminEmployees() {
                     </div>
                 </div>
             )}
+            {detailLoading && <div className="modal-overlay"><div className="modal customer-modal">Đang tải hồ sơ nhân viên...</div></div>}
+            {viewingEmployee && <div className="modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingEmployee(null); }}><section className="modal customer-modal" role="dialog" aria-modal="true" aria-labelledby="employee-detail-title"><div className="modal-header"><div><h2 id="employee-detail-title">Hồ sơ nhân viên</h2><p>{viewingEmployee.employeeCode}</p></div><button className="modal-close" type="button" aria-label="Đóng" onClick={() => setViewingEmployee(null)}>×</button></div><div className="appointment-details-grid"><div><span>Họ tên</span><strong>{viewingEmployee.fullName}</strong></div><div><span>Địa chỉ thư điện tử</span><strong>{viewingEmployee.email || viewingEmployee.user?.email || "—"}</strong></div><div><span>Số điện thoại</span><strong>{viewingEmployee.phone}</strong></div><div><span>Trạng thái</span><strong>{viewingEmployee.status === "ACTIVE" ? "Đang hoạt động" : "Đã khóa"}</strong></div></div><section className="appointment-panel" aria-labelledby="employee-active-tasks-title" style={{ marginTop: 20, padding: 16 }}>
+                    <h3 id="employee-active-tasks-title" style={{ margin: "0 0 12px" }}>{"Công việc"}</h3>
+                    <div className="appointment-tabs" role="tablist" aria-label="Phân loại công việc">
+                        <button className={employeeTaskTab === "current" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={employeeTaskTab === "current"} onClick={() => setEmployeeTaskTab("current")}>
+                            {"Đang thực hiện"} <span>{employeeTasks.filter((ticket) => !["COMPLETED", "CANCELLED", "CUSTOMER_DECLINED", "CANNOT_BE_REPAIRED"].includes(ticket.status.toUpperCase())).length}</span>
+                        </button>
+                        <button className={employeeTaskTab === "past" ? "appointment-tab active" : "appointment-tab"} type="button" role="tab" aria-selected={employeeTaskTab === "past"} onClick={() => setEmployeeTaskTab("past")}>
+                            {"Đã thực hiện"} <span>{employeeTasks.filter((ticket) => ["COMPLETED", "CANCELLED", "CUSTOMER_DECLINED", "CANNOT_BE_REPAIRED"].includes(ticket.status.toUpperCase())).length}</span>
+                        </button>
+                    </div>
+                    {tasksLoading ? <p>{"Đang tải công việc..."}</p> : tasksError ? <p role="alert">{tasksError}</p> : (() => {
+                        const finishedStatuses = ["COMPLETED", "CANCELLED", "CUSTOMER_DECLINED", "CANNOT_BE_REPAIRED"];
+                        const selectedTasks = employeeTasks.filter((ticket) => finishedStatuses.includes(ticket.status.toUpperCase()) === (employeeTaskTab === "past"));
+                        return selectedTasks.length === 0 ? <p>{employeeTaskTab === "current" ? "Không có công việc đang thực hiện." : "Chưa có công việc đã thực hiện."}</p> : (
+                            <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+                                {selectedTasks.map((ticket) => <article key={ticket.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", border: "1px solid var(--border-color, #e5e7eb)", borderRadius: 10 }}>
+                                    <div style={{ minWidth: 0 }}>
+                                        <strong>{ticket.ticketCode} &middot; {ticket.device}</strong>
+                                        <div style={{ fontSize: 13, opacity: 0.8 }}>{ticket.customerName} &middot; {statusLabel(ticket.status)}</div>
+                                    </div>
+                                    <button className="secondary-button" type="button" onClick={() => { setViewingEmployee(null); navigate("/admin/repairs", { state: { openTicketId: ticket.id } }); }}>{"Chi tiết"}</button>
+                                </article>)}
+                            </div>
+                        );
+                    })()}
+                </section>
+                <div className="appointment-search-actions"><button className="secondary-button" type="button" onClick={() => setViewingEmployee(null)}>Đóng</button></div></section></div>}
         </div>
     );
 }
